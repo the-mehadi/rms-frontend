@@ -323,7 +323,7 @@ export default function LoginPage() {
           </Card>
 
           <p className="text-center mt-8 text-sm text-muted-foreground">
-            Don't have an account? Contact your administrator.
+            Don&apos;t have an account? Contact your administrator.
           </p>
         </motion.div>
       </div>
