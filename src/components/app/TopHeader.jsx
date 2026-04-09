@@ -17,6 +17,7 @@ import {
 import {
   BellIcon,
   ChevronRightIcon,
+  LogOutIcon,
   MenuIcon,
   MoonStarIcon,
   SearchIcon,
@@ -25,6 +26,8 @@ import {
 import { useTheme } from "next-themes";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarNavContent } from "@/components/app/SidebarNav";
+import { authAPI } from "@/lib/api/auth";
+import { useRouter } from "next/navigation";
 
 function titleFromPathname(pathname) {
   const last = pathname.split("/").filter(Boolean).at(-1) ?? "dashboard";
@@ -41,8 +44,28 @@ function breadcrumbsFromPathname(pathname) {
 
 export function TopHeader({ className }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [scrolled, setScrolled] = React.useState(false);
   const { theme, setTheme } = useTheme();
+  const [user, setUser] = React.useState(null);
+
+  React.useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        setUser(JSON.parse(userStr));
+      } catch (e) {
+        console.error('Failed to parse user in TopHeader', e);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    authAPI.logout();
+    router.push("/login");
+  };
+
+  const initials = user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'MH';
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -131,12 +154,12 @@ export function TopHeader({ className }) {
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-2xl px-2 py-1.5 transition hover:bg-muted/50">
               <Avatar className="size-9">
                 <AvatarFallback className="bg-rms-gradient text-white">
-                  MH
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-left lg:block">
-                <div className="text-sm font-semibold leading-4">Mehadi</div>
-                <div className="text-xs text-muted-foreground">Admin</div>
+                <div className="text-sm font-semibold leading-4">{user?.name || "Mehadi"}</div>
+                <div className="text-xs text-muted-foreground capitalize">{user?.role || "Admin"}</div>
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -153,7 +176,10 @@ export function TopHeader({ className }) {
                 Toggle theme
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled>Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive focus:text-destructive-foreground">
+                <LogOutIcon className="mr-2 size-4" />
+                Sign out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

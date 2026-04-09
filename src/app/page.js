@@ -20,16 +20,16 @@ export default function Home() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
-              href="/dashboard"
+              href="/login"
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-rms-gradient px-6 text-sm font-semibold text-white shadow-glow transition hover:scale-[1.01]"
             >
-              Enter dashboard
+              Sign In
             </a>
             <a
-              href="/orders"
+              href="/dashboard"
               className="inline-flex h-12 items-center justify-center rounded-2xl border bg-background px-6 text-sm font-semibold text-foreground transition hover:bg-muted"
             >
-              Go to Orders
+              Enter dashboard
             </a>
           </div>
         </div>
