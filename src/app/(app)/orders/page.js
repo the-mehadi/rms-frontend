@@ -54,7 +54,7 @@ function MenuItemCard({ item, onAdd }) {
         </div>
 
         <div className="absolute left-4 top-4 flex items-center gap-2">
-          <Badge className="rounded-full bg-background/70 backdrop-blur">{item.category}</Badge>
+          <Badge variant="secondary" className="rounded-full bg-background/70 backdrop-blur">{item.category}</Badge>
           <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
             {item.tag}
           </Badge>
@@ -289,11 +289,11 @@ export default function OrdersPage() {
                       <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
                       <div className="relative flex h-full flex-col">
                         <div className="flex items-center justify-between gap-2">
-                          <Badge className={`rounded-full ${meta.badge}`}>
+                          <Badge className={`rounded-full  ${meta.badge}`}>
                             {meta.label}
                           </Badge>
                           {t.bill ? (
-                            <Badge className="rounded-full bg-background/60">
+                            <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
                               {formatCurrency(t.bill, "BDT")}
                             </Badge>
                           ) : null}
