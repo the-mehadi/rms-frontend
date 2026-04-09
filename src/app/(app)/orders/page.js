@@ -251,131 +251,140 @@ export default function OrdersPage() {
   const cartCount = Object.values(cart).reduce((n, it) => n + it.qty, 0);
 
   return (
-    <PageTransition className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
-        <section className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Table selection</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Tap a table to start an order
-              </div>
-            </div>
-            <Badge className="rounded-full bg-muted text-muted-foreground">
-              Selected: Table {selectedTable?.number}
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {TABLES.map((t) => {
-              const meta = TABLE_STYLES[t.status];
-              const active = selectedTable?.id === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTable(t)}
-                  className={cn(
-                    "relative aspect-square w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
-                    "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
-                    "active:scale-[0.99]",
-                    meta.ring,
-                    active ? "shadow-glow" : "hover:shadow-lux-sm"
-                  )}
-                >
-                  <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
-                  <div className="relative flex h-full flex-col">
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge className={`rounded-full ${meta.badge}`}>
-                        {meta.label}
-                      </Badge>
-                      {t.bill ? (
-                        <Badge className="rounded-full bg-background/60">
-                          {formatCurrency(t.bill, "BDT")}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="mt-auto">
-                      <div className="text-5xl font-semibold tracking-tight tabular-nums">
-                        {t.number}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Tap to open
-                      </div>
-                    </div>
+    <>
+      <PageTransition className="space-y-6 pb-20 lg:pb-0">
+        <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+          {/* Left Content Area */}
+          <div className="space-y-8">
+            {/* Table selection section */}
+            <section className="space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold">Table selection</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Tap a table to start an order
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <div className="hidden lg:block lg:sticky lg:top-[96px] lg:self-start">
-          <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
-        </div>
-      </div>
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_420px]">
-        <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              {CATEGORIES.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCategory(c)}
-                  className={cn(
-                    "rounded-full border px-4 py-2 text-xs font-semibold transition",
-                    category === c
-                      ? "bg-rms-gradient text-white border-transparent shadow-glow"
-                      : "bg-background/40 text-foreground hover:bg-muted"
-                  )}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative">
-              <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search menu…"
-                className="h-11 w-full rounded-2xl pl-10 sm:w-[320px] focus-lux"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredMenu.map((it) => (
-              <MenuItemCard key={it.id} item={it} onAdd={addToCart} />
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:hidden">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button className="fixed bottom-[92px] right-5 z-40 size-14 rounded-3xl bg-rms-gradient p-0 text-white shadow-glow">
-                <ShoppingBagIcon className="size-5" />
-                {cartCount > 0 ? (
-                  <span className="absolute -top-2 -right-2 grid size-6 place-items-center rounded-full bg-background text-xs font-semibold text-foreground shadow-lux-sm">
-                    {cartCount}
-                  </span>
-                ) : null}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="p-0">
-              <SheetHeader className="p-5">
-                <SheetTitle>Cart</SheetTitle>
-              </SheetHeader>
-              <div className="p-5 pt-0">
-                <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
+                </div>
+                <Badge className="rounded-full bg-muted text-muted-foreground">
+                  Selected: Table {selectedTable?.number}
+                </Badge>
               </div>
-            </SheetContent>
-          </Sheet>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {TABLES.map((t) => {
+                  const meta = TABLE_STYLES[t.status];
+                  const active = selectedTable?.id === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedTable(t)}
+                      className={cn(
+                        "relative aspect-square w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
+                        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
+                        "active:scale-[0.99]",
+                        meta.ring,
+                        active ? "shadow-glow" : "hover:shadow-lux-sm"
+                      )}
+                    >
+                      <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
+                      <div className="relative flex h-full flex-col">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge className={`rounded-full ${meta.badge}`}>
+                            {meta.label}
+                          </Badge>
+                          {t.bill ? (
+                            <Badge className="rounded-full bg-background/60">
+                              {formatCurrency(t.bill, "BDT")}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="mt-auto">
+                          <div className="text-5xl font-semibold tracking-tight tabular-nums">
+                            {t.number}
+                          </div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Tap to open
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Menu section with sticky categories/search bar */}
+            <section className="space-y-4">
+              <div className="sticky top-[96px] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:-mx-6 sm:px-6 lg:-mx-0 lg:px-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {CATEGORIES.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setCategory(c)}
+                        className={cn(
+                          "rounded-full border px-4 py-2 text-xs font-semibold transition",
+                          category === c
+                            ? "bg-rms-gradient text-white border-transparent shadow-glow"
+                            : "bg-background/40 text-foreground hover:bg-muted"
+                        )}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Search menu…"
+                      className="h-11 w-full rounded-2xl pl-10 sm:w-[320px] focus-lux"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredMenu.map((it) => (
+                  <MenuItemCard key={it.id} item={it} onAdd={addToCart} />
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {/* Right Content Area - Desktop Sticky Cart */}
+          <div className="hidden lg:block lg:sticky lg:top-[96px] lg:self-start">
+            <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
+          </div>
         </div>
-      </section>
-    </PageTransition>
+      </PageTransition>
+
+      {/* Mobile Cart Button Trigger - Always Fixed on Mobile (Placed outside PageTransition to avoid transform issues) */}
+      <div className="lg:hidden">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button className="fixed bottom-[104px] right-5 z-40 size-14 rounded-3xl bg-rms-gradient p-0 text-white shadow-glow">
+              <ShoppingBagIcon className="size-5" />
+              {cartCount > 0 ? (
+                <span className="absolute -top-2 -right-2 grid size-6 place-items-center rounded-full bg-background text-xs font-semibold text-foreground shadow-lux-sm">
+                  {cartCount}
+                </span>
+              ) : null}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="p-0">
+            <SheetHeader className="p-5">
+              <SheetTitle>Cart</SheetTitle>
+            </SheetHeader>
+            <div className="p-5 pt-0">
+              <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 }
 
