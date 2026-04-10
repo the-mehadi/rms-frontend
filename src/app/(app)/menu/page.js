@@ -31,13 +31,18 @@ import {
   UploadCloudIcon,
   PencilIcon,
   Trash2Icon,
+  Loader2Icon,
 } from "lucide-react";
+import { categoriesAPI } from "@/lib/api/categories";
+import { toast } from "sonner";
 
-function CategoryTabs({ value, onChange }) {
+function CategoryTabs({ value, onChange, onAddCategory, categories = [] }) {
+  const allCategories = ["All", ...categories.map(c => c.name)];
+  
   return (
     <div className="relative overflow-x-auto">
-      <div className="flex w-max items-center gap-2">
-        {MENU_CATEGORIES.map((c) => {
+      <div className="flex w-max items-center gap-2 mb-4">
+        {allCategories.map((c) => {
           const active = value === c;
           return (
             <button
@@ -58,11 +63,124 @@ function CategoryTabs({ value, onChange }) {
           );
         })}
 
-        <button className="rounded-full border bg-background/40 px-4 py-2 text-xs font-semibold transition hover:bg-muted">
+        <button 
+          onClick={onAddCategory}
+          className="rounded-full border bg-background/40 px-4 py-2 text-xs font-semibold transition hover:bg-muted"
+        >
           + Category
         </button>
       </div>
     </div>
+  );
+}
+
+function CategoryModal({ open, onOpenChange, onSuccess }) {
+  const [name, setName] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [isActive, setIsActive] = React.useState(true);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) {
+      setName("");
+      setDescription("");
+      setIsActive(true);
+    }
+  }, [open]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      toast.error("Please enter a category name");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await categoriesAPI.create({
+        name,
+        description,
+        is_active: isActive
+      });
+      
+      toast.success("Category created successfully");
+      if (onSuccess) onSuccess();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to create category:", error);
+      
+      // Handle validation errors from backend if they exist
+      const errorMessage = error.response?.data?.message || "Failed to create category. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[500px] rounded-4xl">
+        <DialogHeader>
+          <DialogTitle>Create new category</DialogTitle>
+        </DialogHeader>
+
+        <div className="mt-2 space-y-5">
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-muted-foreground">
+              Category name
+            </div>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Desserts"
+              className="h-11 rounded-2xl focus-lux"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-muted-foreground">
+              Description
+            </div>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description of the category…"
+              className="min-h-24 rounded-2xl focus-lux"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-2xl border bg-muted/20 p-4">
+            <div className="space-y-0.5">
+              <div className="text-sm font-semibold">Active status</div>
+              <div className="text-xs text-muted-foreground">
+                Visible in the menu selection
+              </div>
+            </div>
+            <Switch checked={isActive} onCheckedChange={setIsActive} disabled={loading} />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button 
+              variant="ghost" 
+              className="h-11 rounded-2xl" 
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              className="h-11 rounded-2xl bg-rms-gradient text-white shadow-glow"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {loading && <Loader2Icon className="mr-2 size-4 animate-spin" />}
+              {loading ? "Creating..." : "Create category"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -231,7 +349,23 @@ export default function MenuAdminPage() {
   const [category, setCategory] = React.useState("All");
   const [query, setQuery] = React.useState("");
   const [open, setOpen] = React.useState(false);
+  const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState(null);
+  const [categories, setCategories] = React.useState([]);
+
+  const fetchCategories = React.useCallback(async () => {
+    try {
+      const data = await categoriesAPI.getAll();
+      setCategories(data.data.items);
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
+      toast.error("Failed to load categories");
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const filtered = React.useMemo(() => {
     return MENU_ADMIN_ITEMS.filter((it) => {
@@ -296,7 +430,12 @@ export default function MenuAdminPage() {
 
         <Separator className="my-5" />
 
-        <CategoryTabs value={category} onChange={setCategory} />
+        <CategoryTabs 
+          value={category} 
+          onChange={setCategory} 
+          onAddCategory={() => setCategoryOpen(true)}
+          categories={categories}
+        />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -317,6 +456,12 @@ export default function MenuAdminPage() {
         onOpenChange={setOpen}
         mode={editItem ? "edit" : "create"}
         initial={editItem}
+      />
+
+      <CategoryModal 
+        open={categoryOpen}
+        onOpenChange={setCategoryOpen}
+        onSuccess={fetchCategories}
       />
     </PageTransition>
   );
