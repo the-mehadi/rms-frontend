@@ -11,7 +11,7 @@ export function MobileNav() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
       <div className="glass-strong mx-3 mb-3 rounded-3xl px-1.5 py-1.5 shadow-lux-md">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-6 gap-1">
           {MOBILE_TABS.map((tab) => {
             const active = pathname === tab.href;
             const Icon = tab.icon;

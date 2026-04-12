@@ -6,6 +6,7 @@ import {
   NotebookPenIcon,
   LineChartIcon,
   SettingsIcon,
+  TableIcon,
 } from "lucide-react";
 
 export const NAV_GROUPS = [
@@ -27,6 +28,7 @@ export const NAV_GROUPS = [
     label: "Admin",
     items: [
       { href: "/menu", label: "Menu", icon: NotebookPenIcon },
+      { href: "/tables", label: "Tables", icon: TableIcon },
       { href: "/reports", label: "Reports", icon: LineChartIcon },
       { href: "/settings", label: "Settings", icon: SettingsIcon, disabled: true },
     ],
@@ -38,6 +40,7 @@ export const MOBILE_TABS = [
   { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
   { href: "/kitchen", label: "Kitchen", icon: CookingPotIcon },
   { href: "/billing", label: "Bill", icon: ReceiptTextIcon },
+  { href: "/tables", label: "Tables", icon: TableIcon },
   { href: "/menu", label: "Menu", icon: NotebookPenIcon },
 ];
 
