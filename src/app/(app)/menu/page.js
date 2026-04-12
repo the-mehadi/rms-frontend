@@ -34,6 +34,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { categoriesAPI } from "@/lib/api/categories";
+import { menuItemsAPI } from "@/lib/api/menuItems";
 import { toast } from "sonner";
 
 function CategoryTabs({ value, onChange, onAddCategory, categories = [] }) {
@@ -184,19 +185,70 @@ function CategoryModal({ open, onOpenChange, onSuccess }) {
   );
 }
 
-function ItemModal({ open, onOpenChange, mode, initial }) {
+
+function ItemModal({ open, onOpenChange, mode, initial, categories = [], onSuccess }) {
   const [name, setName] = React.useState(initial?.name ?? "");
   const [price, setPrice] = React.useState(initial?.price ?? "");
-  const [category, setCategory] = React.useState(initial?.category ?? "Mains");
-  const [desc, setDesc] = React.useState("");
+  const [categoryId, setCategoryId] = React.useState(initial?.category_id ?? "");
+  const [desc, setDesc] = React.useState(initial?.description ?? "");
+  const [isAvailable, setIsAvailable] = React.useState(initial?.is_available ?? true);
+  const [images, setImages] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const fileInputRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!open) return;
     setName(initial?.name ?? "");
     setPrice(initial?.price ?? "");
-    setCategory(initial?.category ?? "Mains");
-    setDesc("");
+    setCategoryId(initial?.category_id ?? "");
+    setDesc(initial?.description ?? "");
+    setIsAvailable(initial?.is_available ?? true);
+    setImages([]);
   }, [open, initial]);
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !price || !categoryId) {
+      toast.error("Please fill in all required fields (Name, Price, Category)");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("name", name);
+      formData.append("price", price);
+      formData.append("category_id", categoryId);
+      formData.append("description", desc);
+      formData.append("is_available", isAvailable ? 1 : 0);
+      
+      images.forEach((img) => {
+        formData.append("images[]", img);
+      });
+
+      if (mode === "edit" && initial?.id) {
+        // Implement update later if needed
+        toast.info("Update functionality not yet implemented");
+      } else {
+        await menuItemsAPI.create(formData);
+        toast.success("Menu item created successfully");
+      }
+
+      if (onSuccess) onSuccess();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to save menu item:", error);
+      const errorMessage = error.response?.data?.message || "Failed to save menu item. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files) {
+      setImages(Array.from(e.target.files));
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,34 +260,50 @@ function ItemModal({ open, onOpenChange, mode, initial }) {
         <div className="mt-2 space-y-5">
           <div className="rounded-3xl border bg-muted/20 p-4">
             <div className="text-xs font-semibold text-muted-foreground">
-              Image upload
+              Image upload (Multiple)
             </div>
-            <div className="mt-3 grid place-items-center rounded-3xl border bg-background/40 p-8 text-center">
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              disabled={loading}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-3 w-full grid place-items-center rounded-3xl border bg-background/40 p-8 text-center transition hover:bg-background/60"
+              disabled={loading}
+            >
               <div className="grid size-12 place-items-center rounded-2xl bg-rms-gradient text-white shadow-glow">
                 <UploadCloudIcon className="size-5" />
               </div>
-              <div className="mt-3 text-sm font-semibold">Drag & drop</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                UI placeholder (wire to storage later)
+              <div className="mt-3 text-sm font-semibold">
+                {images.length > 0 ? `${images.length} files selected` : "Click to upload images"}
               </div>
-            </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Support for JPG, PNG, WEBP
+              </div>
+            </button>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground">
-                Name
+                Name <span className="text-rose-500">*</span>
               </div>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Truffle Pasta"
                 className="h-11 rounded-2xl focus-lux"
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
               <div className="text-xs font-semibold text-muted-foreground">
-                Price
+                Price <span className="text-rose-500">*</span>
               </div>
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -247,6 +315,7 @@ function ItemModal({ open, onOpenChange, mode, initial }) {
                   inputMode="decimal"
                   placeholder="990"
                   className="h-11 rounded-2xl pl-8 focus-lux"
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -254,21 +323,22 @@ function ItemModal({ open, onOpenChange, mode, initial }) {
 
           <div className="space-y-2">
             <div className="text-xs font-semibold text-muted-foreground">
-              Category
+              Category <span className="text-rose-500">*</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {MENU_CATEGORIES.filter((x) => x !== "All").slice(0, 6).map((c) => (
+              {categories.map((c) => (
                 <button
-                  key={c}
-                  onClick={() => setCategory(c)}
+                  key={c.id}
+                  onClick={() => setCategoryId(c.id)}
                   className={cn(
                     "rounded-full border px-4 py-2 text-xs font-semibold transition",
-                    category === c
+                    categoryId === c.id
                       ? "bg-rms-gradient text-white border-transparent shadow-glow"
                       : "bg-background/40 hover:bg-muted"
                   )}
+                  disabled={loading}
                 >
-                  {c}
+                  {c.name}
                 </button>
               ))}
             </div>
@@ -281,17 +351,38 @@ function ItemModal({ open, onOpenChange, mode, initial }) {
             <Textarea
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
-              placeholder="Rich text editor placeholder…"
-              className="min-h-28 rounded-2xl focus-lux"
+              placeholder="Brief description of the menu item…"
+              className="min-h-24 rounded-2xl focus-lux"
+              disabled={loading}
             />
           </div>
 
+          <div className="flex items-center justify-between rounded-2xl border bg-muted/20 p-4">
+            <div className="space-y-0.5">
+              <div className="text-sm font-semibold">Availability status</div>
+              <div className="text-xs text-muted-foreground">
+                Show or hide this item in the menu
+              </div>
+            </div>
+            <Switch checked={isAvailable} onCheckedChange={setIsAvailable} disabled={loading} />
+          </div>
+
           <div className="flex items-center justify-end gap-3 pt-2">
-            <Button variant="ghost" className="h-11 rounded-2xl" onClick={() => onOpenChange(false)}>
+            <Button 
+              variant="ghost" 
+              className="h-11 rounded-2xl" 
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
               Cancel
             </Button>
-            <Button className="h-11 rounded-2xl bg-rms-gradient text-white shadow-glow">
-              Save
+            <Button 
+              className="h-11 rounded-2xl bg-rms-gradient text-white shadow-glow"
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {loading && <Loader2Icon className="mr-2 size-4 animate-spin" />}
+              {loading ? "Saving..." : "Save Item"}
             </Button>
           </div>
         </div>
@@ -299,6 +390,7 @@ function ItemModal({ open, onOpenChange, mode, initial }) {
     </Dialog>
   );
 }
+
 
 function ItemCard({ item, onEdit }) {
   return (
@@ -328,7 +420,7 @@ function ItemCard({ item, onEdit }) {
                 {formatCurrency(item.price, "BDT")}
               </div>
             </div>
-            <Badge className="rounded-full bg-background/70">{item.category}</Badge>
+            <Badge className="rounded-full bg-amber-500/12 text-white-900 dark:text-white-300">{item.category ? item.categoryName : "N/A"}</Badge>
           </div>
 
           <Separator className="my-4" />
@@ -337,7 +429,7 @@ function ItemCard({ item, onEdit }) {
             <div className="text-xs font-semibold text-muted-foreground">
               Availability
             </div>
-            <Switch checked={item.available} />
+            <Switch checked={item.available ?? item.is_available} />
           </div>
         </div>
       </div>
@@ -352,6 +444,7 @@ export default function MenuAdminPage() {
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [editItem, setEditItem] = React.useState(null);
   const [categories, setCategories] = React.useState([]);
+  const [items, setItems] = React.useState([]);
 
   const fetchCategories = React.useCallback(async () => {
     try {
@@ -363,19 +456,44 @@ export default function MenuAdminPage() {
     }
   }, []);
 
+  const fetchItems = React.useCallback(async () => {
+    try {
+      const data = await menuItemsAPI.getAll();
+      setItems(data.data.items);
+    } catch (error) {
+      console.error("Failed to fetch menu items:", error);
+      toast.error("Failed to load menu items");
+    }
+  }, []);
+
   React.useEffect(() => {
     fetchCategories();
   }, [fetchCategories]);
 
+  React.useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  const getCategoryNameById = React.useCallback(
+    (id) => categories.find((c) => c.id === id)?.name ?? undefined,
+    [categories]
+  );
+
   const filtered = React.useMemo(() => {
-    return MENU_ADMIN_ITEMS.filter((it) => {
-      const inCategory = category === "All" || it.category === category;
+    const normalized = items.map((it) => ({
+      ...it,
+      categoryName: getCategoryNameById(it.category_id),
+      available: it.is_available,
+    }));
+    return normalized.filter((it) => {
+      const inCategory =
+        category === "All" || it.categoryName === category;
       const inQuery =
         query.trim() === "" ||
         it.name.toLowerCase().includes(query.trim().toLowerCase());
       return inCategory && inQuery;
     });
-  }, [category, query]);
+  }, [items, category, query, getCategoryNameById]);
 
   return (
     <PageTransition className="space-y-6">
@@ -456,6 +574,8 @@ export default function MenuAdminPage() {
         onOpenChange={setOpen}
         mode={editItem ? "edit" : "create"}
         initial={editItem}
+        categories={categories}
+        onSuccess={fetchItems}
       />
 
       <CategoryModal 
