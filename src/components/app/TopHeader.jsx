@@ -60,8 +60,8 @@ export function TopHeader({ className }) {
     }
   }, []);
 
-  const handleLogout = () => {
-    authAPI.logout();
+  const handleLogout = async () => {
+    await authAPI.logout();
     router.push("/login");
   };
 
