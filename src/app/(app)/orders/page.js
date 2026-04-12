@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { CATEGORIES, MENU_ITEMS } from "@/lib/mock/orders";
 import { tablesAPI } from "@/lib/api/table";
+import { categoriesAPI } from "@/lib/api/categories";
 import { formatCurrency } from "@/lib/format";
 import {
   MinusIcon,
@@ -223,12 +224,15 @@ function Cart({ cart, setCart, notes, setNotes }) {
 export default function OrdersPage() {
   const [tables, setTables] = React.useState([]);
   const [selectedTable, setSelectedTable] = React.useState(null);
+  const [categories, setCategories] = React.useState(["All"]);
   const [category, setCategory] = React.useState("All");
   const [query, setQuery] = React.useState("");
   const [cart, setCart] = React.useState({});
   const [notes, setNotes] = React.useState("");
   const [loading, setLoading] = React.useState(true);
+  const [loadingCategories, setLoadingCategories] = React.useState(true);
 
+  // table fetch data from API
   React.useEffect(() => {
     const fetchTables = async () => {
       try {
@@ -251,8 +255,24 @@ export default function OrdersPage() {
       }
     };
 
+    const fetchCategories = async () => {
+      try {
+        const response = await categoriesAPI.getAll();
+        if (response.success) {
+          const fetchedCategories = response.data.items.map((c) => c.name);
+          setCategories(["All", ...fetchedCategories]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
     fetchTables();
+    fetchCategories();
   }, []);
+
 
   const filteredMenu = React.useMemo(() => {
     return MENU_ITEMS.filter((it) => {
@@ -360,7 +380,7 @@ export default function OrdersPage() {
               <div className="sticky top-[96px] z-30 -mx-4 px-4 py-3 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:-mx-6 sm:px-6 lg:-mx-0 lg:px-0">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-wrap items-center gap-2">
-                    {CATEGORIES.map((c) => (
+                    {categories.map((c) => (
                       <button
                         key={c}
                         onClick={() => setCategory(c)}
