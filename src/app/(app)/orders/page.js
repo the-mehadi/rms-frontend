@@ -12,7 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { CATEGORIES, MENU_ITEMS, TABLES } from "@/lib/mock/orders";
+import { CATEGORIES, MENU_ITEMS } from "@/lib/mock/orders";
+import { tablesAPI } from "@/lib/api/table";
 import { formatCurrency } from "@/lib/format";
 import {
   MinusIcon,
@@ -220,11 +221,38 @@ function Cart({ cart, setCart, notes, setNotes }) {
 }
 
 export default function OrdersPage() {
-  const [selectedTable, setSelectedTable] = React.useState(TABLES[1]);
+  const [tables, setTables] = React.useState([]);
+  const [selectedTable, setSelectedTable] = React.useState(null);
   const [category, setCategory] = React.useState("All");
   const [query, setQuery] = React.useState("");
   const [cart, setCart] = React.useState({});
   const [notes, setNotes] = React.useState("");
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const response = await tablesAPI.getAll();
+        if (response.success) {
+          const mappedTables = response.data.map((t) => ({
+            ...t,
+            number: t.table_number, // map table_number to number
+            bill: t.bill || null, // API might not have bill yet
+          }));
+          setTables(mappedTables);
+          if (mappedTables.length > 0) {
+            setSelectedTable(mappedTables[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch tables:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTables();
+  }, []);
 
   const filteredMenu = React.useMemo(() => {
     return MENU_ITEMS.filter((it) => {
@@ -271,45 +299,59 @@ export default function OrdersPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                {TABLES.map((t) => {
-                  const meta = TABLE_STYLES[t.status];
-                  const active = selectedTable?.id === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      onClick={() => setSelectedTable(t)}
-                      className={cn(
-                        "relative aspect-square w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
-                        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
-                        "active:scale-[0.99]",
-                        meta.ring,
-                        active ? "shadow-glow" : "hover:shadow-lux-sm"
-                      )}
-                    >
-                      <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
-                      <div className="relative flex h-full flex-col">
-                        <div className="flex items-center justify-between gap-2">
-                          <Badge className={`rounded-full  ${meta.badge}`}>
-                            {meta.label}
-                          </Badge>
-                          {t.bill ? (
-                            <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
-                              {formatCurrency(t.bill, "BDT")}
+                {loading ? (
+                  // Loading skeletons
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="aspect-square w-full animate-pulse rounded-3xl border bg-muted/20"
+                    />
+                  ))
+                ) : tables.length > 0 ? (
+                  tables.map((t) => {
+                    const meta = TABLE_STYLES[t.status] || TABLE_STYLES.available;
+                    const active = selectedTable?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setSelectedTable(t)}
+                        className={cn(
+                          "relative aspect-square w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
+                          "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
+                          "active:scale-[0.99]",
+                          meta.ring,
+                          active ? "shadow-glow" : "hover:shadow-lux-sm"
+                        )}
+                      >
+                        <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
+                        <div className="relative flex h-full flex-col">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge className={`rounded-full  ${meta.badge}`}>
+                              {meta.label}
                             </Badge>
-                          ) : null}
-                        </div>
-                        <div className="mt-auto">
-                          <div className="text-5xl font-semibold tracking-tight tabular-nums">
-                            {t.number}
+                            {t.bill ? (
+                              <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
+                                {formatCurrency(t.bill, "BDT")}
+                              </Badge>
+                            ) : null}
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            Tap to open
+                          <div className="mt-auto">
+                            <div className="text-5xl font-semibold tracking-tight tabular-nums">
+                              {t.number}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Tap to open
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="col-span-full py-8 text-center text-muted-foreground">
+                    No tables found.
+                  </div>
+                )}
               </div>
             </section>
 
