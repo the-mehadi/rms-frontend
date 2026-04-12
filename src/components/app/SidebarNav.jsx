@@ -75,8 +75,8 @@ export function SidebarNavContent({ className, surface = "dark" }) {
     }
   }, []);
 
-  const handleLogout = () => {
-    authAPI.logout();
+  const handleLogout = async () => {
+    await authAPI.logout();
     router.push("/login");
   };
 

@@ -8,12 +8,30 @@ export const authAPI = {
     return response.data;
   },
   
-  logout: () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      Cookies.remove('token');
-      Cookies.remove('user');
+  // logout: () => {
+  //   if (typeof window !== 'undefined') {
+  //     localStorage.removeItem('token');
+  //     localStorage.removeItem('user');
+  //     Cookies.remove('token');
+  //     Cookies.remove('user');
+  //   }
+  // },
+
+  logout: async () => {
+    try {
+      await apiClient.post('/auth/logout'); // call backend
+    } catch (err) {
+      // even if API fails, still force logout locally
+      console.log('Logout API failed');
+    } finally {
+      // always clear client state
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        Cookies.remove('token');
+        Cookies.remove('user');
+      }
     }
-  },
+  }
+
 };
