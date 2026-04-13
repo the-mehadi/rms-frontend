@@ -17,6 +17,7 @@ import { categoriesAPI } from "@/lib/api/categories";
 import { menuItemsAPI } from "@/lib/api/menuItems";
 import { ordersAPI } from "@/lib/api/orders";
 import { formatCurrency } from "@/lib/format";
+import { toast } from "sonner";
 import {
   MinusIcon,
   PlusIcon,
@@ -281,7 +282,7 @@ export default function OrdersPage() {
           setMenuItems(response.data.items ?? []);
         }
       } catch (error) {
-        console.error("Failed to fetch menu items:", error);
+        console.error("Failed to fetch menu items:", error);        
       } finally {
         setLoadingMenu(false);
       }
@@ -297,6 +298,7 @@ export default function OrdersPage() {
     [categoryItems]
   );
 
+  //fetch menu items with category name
   const filteredMenu = React.useMemo(() => {
     return menuItems
       .map((it) => ({
@@ -314,6 +316,7 @@ export default function OrdersPage() {
       });
   }, [menuItems, categoryNameById, category, query]);
 
+  //add to cart item
   const addToCart = (item) => {
     setCart((c) => {
       const existing = c[item.id];
@@ -326,6 +329,7 @@ export default function OrdersPage() {
     });
   };
 
+  //submit order
   const submitOrder = async () => {
     if (!selectedTable?.id) return;
     if (Object.keys(cart).length === 0) return;
@@ -343,9 +347,11 @@ export default function OrdersPage() {
         })),
       });
       setCart({});
-      setNotes("");
+      setNotes("");      
+      toast.success("Order submitted successfully.");
     } catch (error) {
       console.error("Failed to submit order:", error);
+      toast.error("Failed to submit order");
     } finally {
       setSubmittingOrder(false);
     }
