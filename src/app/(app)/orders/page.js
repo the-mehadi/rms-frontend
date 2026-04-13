@@ -15,6 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { tablesAPI } from "@/lib/api/table";
 import { categoriesAPI } from "@/lib/api/categories";
 import { menuItemsAPI } from "@/lib/api/menuItems";
+import { ordersAPI } from "@/lib/api/orders";
 import { formatCurrency } from "@/lib/format";
 import {
   MinusIcon,
@@ -111,7 +112,7 @@ function QuantityStepper({ value, onChange }) {
   );
 }
 
-function Cart({ cart, setCart, notes, setNotes }) {
+function Cart({ cart, setCart, notes, setNotes, selectedTable, onSubmitOrder, submittingOrder }) {
   const items = Object.values(cart);
   const subtotal = items.reduce((sum, it) => sum + it.price * it.qty, 0);
 
@@ -210,12 +211,10 @@ function Cart({ cart, setCart, notes, setNotes }) {
 
       <Button
         className="mt-5 h-12 w-full rounded-2xl bg-rms-gradient text-white shadow-glow"
-        disabled={items.length === 0}
-        onClick={() => {
-          // UI-only: show toast later if desired
-        }}
+        disabled={items.length === 0 || !selectedTable?.id || submittingOrder}
+        onClick={onSubmitOrder}
       >
-        Submit order
+        {submittingOrder ? "Submitting..." : "Submit order"}
       </Button>
     </div>
   );
@@ -234,6 +233,7 @@ export default function OrdersPage() {
   const [menuItems, setMenuItems] = React.useState([]);
   const [categoryItems, setCategoryItems] = React.useState([]);
   const [loadingMenu, setLoadingMenu] = React.useState(true);
+  const [submittingOrder, setSubmittingOrder] = React.useState(false);
 
   // table fetch data from API
   React.useEffect(() => {
@@ -324,6 +324,31 @@ export default function OrdersPage() {
           : { ...item, qty: 1 },
       };
     });
+  };
+
+  const submitOrder = async () => {
+    if (!selectedTable?.id) return;
+    if (Object.keys(cart).length === 0) return;
+
+    try {
+      setSubmittingOrder(true);
+      await ordersAPI.create({
+        table_id: selectedTable.id,
+        status: "pending",
+        notes: notes || null,
+        items: Object.values(cart).map((item) => ({
+          menu_item_id: item.id,
+          quantity: item.qty,
+          unit_price: item.price,
+        })),
+      });
+      setCart({});
+      setNotes("");
+    } catch (error) {
+      console.error("Failed to submit order:", error);
+    } finally {
+      setSubmittingOrder(false);
+    }
   };
 
   const cartCount = Object.values(cart).reduce((n, it) => n + it.qty, 0);
@@ -461,7 +486,15 @@ export default function OrdersPage() {
 
           {/* Right Content Area - Desktop Sticky Cart */}
           <div className="hidden lg:block lg:sticky lg:top-[96px] lg:self-start">
-            <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
+            <Cart
+              cart={cart}
+              setCart={setCart}
+              notes={notes}
+              setNotes={setNotes}
+              selectedTable={selectedTable}
+              onSubmitOrder={submitOrder}
+              submittingOrder={submittingOrder}
+            />
           </div>
         </div>
       </PageTransition>
@@ -484,7 +517,15 @@ export default function OrdersPage() {
               <SheetTitle>Cart</SheetTitle>
             </SheetHeader>
             <div className="p-5 pt-0">
-              <Cart cart={cart} setCart={setCart} notes={notes} setNotes={setNotes} />
+              <Cart
+                cart={cart}
+                setCart={setCart}
+                notes={notes}
+                setNotes={setNotes}
+                selectedTable={selectedTable}
+                onSubmitOrder={submitOrder}
+                submittingOrder={submittingOrder}
+              />
             </div>
           </SheetContent>
         </Sheet>
