@@ -12,9 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { CATEGORIES, MENU_ITEMS } from "@/lib/mock/orders";
 import { tablesAPI } from "@/lib/api/table";
 import { categoriesAPI } from "@/lib/api/categories";
+import { menuItemsAPI } from "@/lib/api/menuItems";
 import { formatCurrency } from "@/lib/format";
 import {
   MinusIcon,
@@ -231,6 +231,9 @@ export default function OrdersPage() {
   const [notes, setNotes] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [loadingCategories, setLoadingCategories] = React.useState(true);
+  const [menuItems, setMenuItems] = React.useState([]);
+  const [categoryItems, setCategoryItems] = React.useState([]);
+  const [loadingMenu, setLoadingMenu] = React.useState(true);
 
   // table fetch data from API
   React.useEffect(() => {
@@ -259,7 +262,9 @@ export default function OrdersPage() {
       try {
         const response = await categoriesAPI.getAll();
         if (response.success) {
-          const fetchedCategories = response.data.items.map((c) => c.name);
+          const fetchedCategoryItems = response.data.items ?? [];
+          const fetchedCategories = fetchedCategoryItems.map((c) => c.name);
+          setCategoryItems(fetchedCategoryItems);
           setCategories(["All", ...fetchedCategories]);
         }
       } catch (error) {
@@ -269,20 +274,45 @@ export default function OrdersPage() {
       }
     };
 
+    const fetchMenuItems = async () => {
+      try {
+        const response = await menuItemsAPI.getAll();
+        if (response.success) {
+          setMenuItems(response.data.items ?? []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch menu items:", error);
+      } finally {
+        setLoadingMenu(false);
+      }
+    };
+
     fetchTables();
     fetchCategories();
+    fetchMenuItems();
   }, []);
 
+  const categoryNameById = React.useMemo(
+    () => new Map(categoryItems.map((item) => [item.id, item.name])),
+    [categoryItems]
+  );
 
   const filteredMenu = React.useMemo(() => {
-    return MENU_ITEMS.filter((it) => {
+    return menuItems
+      .map((it) => ({
+        ...it,
+        price: Number(it.price) || 0,
+        category: categoryNameById.get(it.category_id) ?? "Uncategorized",
+        tag: it.is_available ? "Available" : "Unavailable",
+      }))
+      .filter((it) => {
       const inCategory = category === "All" || it.category === category;
       const inQuery =
         query.trim() === "" ||
         it.name.toLowerCase().includes(query.trim().toLowerCase());
       return inCategory && inQuery;
-    });
-  }, [category, query]);
+      });
+  }, [menuItems, categoryNameById, category, query]);
 
   const addToCart = (item) => {
     setCart((c) => {
@@ -409,9 +439,22 @@ export default function OrdersPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredMenu.map((it) => (
-                  <MenuItemCard key={it.id} item={it} onAdd={addToCart} />
-                ))}
+                {loadingMenu || loadingCategories ? (
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="aspect-[4/3] animate-pulse rounded-3xl border bg-muted/20"
+                    />
+                  ))
+                ) : filteredMenu.length > 0 ? (
+                  filteredMenu.map((it) => (
+                    <MenuItemCard key={it.id} item={it} onAdd={addToCart} />
+                  ))
+                ) : (
+                  <div className="col-span-full rounded-3xl border bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                    No menu items found.
+                  </div>
+                )}
               </div>
             </section>
           </div>
