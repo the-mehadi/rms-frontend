@@ -170,6 +170,18 @@ export default function KitchenPage() {
   const [orders, setOrders] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [now, setNow] = React.useState(() => Date.now());
+  const prevOrderIds = React.useRef(new Set());
+  const audioRef = React.useRef(null);
+
+  React.useEffect(() => {
+    audioRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+  }, []);
+
+  const playNotification = React.useCallback(() => {
+    if (sound && audioRef.current) {
+      audioRef.current.play().catch((err) => console.error("Audio play failed:", err));
+    }
+  }, [sound]);
 
   const fetchOrders = React.useCallback(async () => {
     try {
@@ -178,7 +190,19 @@ export default function KitchenPage() {
         toast.error(data.message || "Failed to fetch orders");
         return;
       }
-      setOrders(data);
+      
+      const newOrders = Array.isArray(data) ? data : [];
+      const currentIds = new Set(newOrders.map(o => o.id));
+      
+      // Check for any new order ID that wasn't in the previous set
+      const hasNewOrder = newOrders.some(o => !prevOrderIds.current.has(o.id));
+      
+      if (hasNewOrder && prevOrderIds.current.size > 0) {
+        playNotification();
+      }
+      
+      prevOrderIds.current = currentIds;
+      setOrders(newOrders);
     } catch (err) {
       const errorData = err.response?.data;
       if (errorData && errorData.success === false) {
@@ -189,7 +213,7 @@ export default function KitchenPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [playNotification]);
 
   React.useEffect(() => {
     fetchOrders();
