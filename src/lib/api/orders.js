@@ -5,4 +5,8 @@ export const ordersAPI = {
     const response = await apiClient.post("/orders", data);
     return response.data;
   },
+  updateStatus: async (id, status) => {
+    const response = await apiClient.patch(`/orders/${id}/status`, { status });
+    return response.data;
+  },
 };

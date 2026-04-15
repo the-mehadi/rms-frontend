@@ -19,12 +19,19 @@ import { ordersAPI } from "@/lib/api/orders";
 import { formatCurrency } from "@/lib/format";
 import { toast } from "sonner";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   MinusIcon,
   PlusIcon,
   SearchIcon,
   ShoppingBagIcon,
   SparklesIcon,
   Trash2Icon,
+  MoreVerticalIcon,
 } from "lucide-react";
 
 const TABLE_STYLES = {
@@ -236,29 +243,21 @@ export default function OrdersPage() {
   const [loadingMenu, setLoadingMenu] = React.useState(true);
   const [submittingOrder, setSubmittingOrder] = React.useState(false);
 
+  const fetchTables = React.useCallback(async () => {
+    try {
+      const response = await tablesAPI.getAll();
+      if (response.success) {
+        setTables(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch tables:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // table fetch data from API
   React.useEffect(() => {
-    const fetchTables = async () => {
-      try {
-        const response = await tablesAPI.getAll();
-        if (response.success) {
-          const mappedTables = response.data.map((t) => ({
-            ...t,
-            number: t.table_number, // map table_number to number
-            bill: t.bill || null, // API might not have bill yet
-          }));
-          setTables(mappedTables);
-          if (mappedTables.length > 0) {
-            setSelectedTable(mappedTables[0]);
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch tables:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     const fetchCategories = async () => {
       try {
         const response = await categoriesAPI.getAll();
@@ -291,7 +290,25 @@ export default function OrdersPage() {
     fetchTables();
     fetchCategories();
     fetchMenuItems();
-  }, []);
+
+    const interval = setInterval(fetchTables, 10000);
+    return () => clearInterval(interval);
+  }, [fetchTables]);
+
+  const handleUpdateOrderStatus = async (orderId, status) => {
+    try {
+      const response = await ordersAPI.updateStatus(orderId, status);
+      if (response.success === false) {
+        toast.error(response.message || "Failed to update order");
+      } else {
+        toast.success(`Order ${status === "served" ? "marked as served" : "cancelled"} successfully`);
+        fetchTables();
+      }
+    } catch (error) {
+      console.error("Failed to update order status:", error);
+      toast.error("Failed to update order status");
+    }
+  };
 
   const categoryNameById = React.useMemo(
     () => new Map(categoryItems.map((item) => [item.id, item.name])),
@@ -392,40 +409,94 @@ export default function OrdersPage() {
                   tables.map((t) => {
                     const meta = TABLE_STYLES[t.status] || TABLE_STYLES.available;
                     const active = selectedTable?.id === t.id;
+                    const isSelectable = t.status === "available";
+                    const hasActiveOrder = !!t.active_order;
+
                     return (
-                      <button
-                        key={t.id}
-                        onClick={() => setSelectedTable(t)}
-                        className={cn(
-                          "relative aspect-square w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
-                          "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
-                          "active:scale-[0.99]",
-                          meta.ring,
-                          active ? "shadow-glow" : "hover:shadow-lux-sm"
-                        )}
-                      >
-                        <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
-                        <div className="relative flex h-full flex-col">
-                          <div className="flex items-center justify-between gap-2">
-                            <Badge className={`rounded-full  ${meta.badge}`}>
-                              {meta.label}
-                            </Badge>
-                            {t.bill ? (
-                              <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
-                                {formatCurrency(t.bill, "BDT")}
+                      <div key={t.id} className="relative aspect-square w-full">
+                        <button
+                          disabled={!isSelectable}
+                          onClick={() => setSelectedTable(t)}
+                          className={cn(
+                            "relative h-full w-full overflow-hidden rounded-3xl border bg-background/40 p-4 text-left transition",
+                            "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-ring/30",
+                            "active:scale-[0.99]",
+                            meta.ring,
+                            active ? "shadow-glow" : "hover:shadow-lux-sm",
+                            !isSelectable && "cursor-not-allowed opacity-50"
+                          )}
+                        >
+                          <div className={cn("absolute inset-0 opacity-80", meta.bg)} />
+                          <div className="relative flex h-full flex-col">
+                            <div className="flex items-center justify-between gap-2">
+                              <Badge className={`rounded-full ${meta.badge}`}>
+                                {meta.label}
                               </Badge>
-                            ) : null}
-                          </div>
-                          <div className="mt-auto">
-                            <div className="text-5xl font-semibold tracking-tight tabular-nums">
-                              {t.number}
+                              {t.bill ? (
+                                <Badge className="rounded-full bg-amber-500/12 text-amber-900 dark:text-amber-300">
+                                  {formatCurrency(t.bill, "BDT")}
+                                </Badge>
+                              ) : null}
                             </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              Tap to open
+                            <div className="mt-auto">
+                              <div className="text-5xl font-semibold tracking-tight tabular-nums">
+                                {t.table_number}
+                              </div>
+                              {hasActiveOrder ? (
+                                <div
+                                  className={cn(
+                                    "mt-1 text-xs font-semibold uppercase tracking-wider",
+                                    t.active_order.status === "pending" && "text-yellow-500",
+                                    t.active_order.status === "preparing" && "text-orange-500",
+                                    t.active_order.status === "ready" && "animate-pulse text-emerald-500"
+                                  )}
+                                >
+                                  {t.active_order.status}
+                                </div>
+                              ) : (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {isSelectable ? "Tap to open" : "Unavailable"}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+
+                        {t.status === "occupied" && t.active_order && (
+                          <div className="absolute right-2 bottom-2 z-10">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 rounded-xl bg-background/60 backdrop-blur-sm hover:bg-background/80"
+                                >
+                                  <MoreVerticalIcon className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                {t.active_order.status === "ready" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleUpdateOrderStatus(t.active_order.id, "served")
+                                    }
+                                  >
+                                    Mark Served
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  className="text-rose-600 focus:text-rose-600"
+                                  onClick={() =>
+                                    handleUpdateOrderStatus(t.active_order.id, "cancelled")
+                                  }
+                                >
+                                  Cancel Order
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        )}
+                      </div>
                     );
                   })
                 ) : (
