@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import apiClient from "@/lib/api/client";
+import { toast } from "sonner";
 import {
   BellRingIcon,
   ClockIcon,
@@ -173,9 +174,18 @@ export default function KitchenPage() {
   const fetchOrders = React.useCallback(async () => {
     try {
       const { data } = await apiClient.get("/kitchen/orders");
+      if (data && data.success === false) {
+        toast.error(data.message || "Failed to fetch orders");
+        return;
+      }
       setOrders(data);
     } catch (err) {
-      console.error("Failed to fetch kitchen orders:", err);
+      const errorData = err.response?.data;
+      if (errorData && errorData.success === false) {
+        toast.error(errorData.message);
+      } else {
+        console.error("Failed to fetch kitchen orders:", err);
+      }
     } finally {
       setLoading(false);
     }
@@ -208,10 +218,20 @@ export default function KitchenPage() {
     if (currentStatus === "ready") nextStatus = "served";
 
     try {
-      await apiClient.patch(`/orders/${id}/status`, { status: nextStatus });
+      const { data } = await apiClient.patch(`/orders/${id}/status`, { status: nextStatus });
+      if (data && data.success === false) {
+        toast.error(data.message);
+        return;
+      }
       await fetchOrders();
     } catch (err) {
-      console.error("Failed to update order status:", err);
+      const errorData = err.response?.data;
+      if (errorData && errorData.success === false) {
+        toast.error(errorData.message);
+      } else {
+        console.error("Failed to update order status:", err);
+        toast.error("Failed to update order status");
+      }
     }
   };
 
