@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { KDS_ORDERS } from "@/lib/mock/kitchen";
+import apiClient from "@/lib/api/client";
 import {
   BellRingIcon,
   ClockIcon,
   FlameIcon,
   MoveRightIcon,
   CheckCircle2Icon,
+  Loader2Icon,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -24,7 +25,8 @@ const COLUMNS = [
   { key: "ready", label: "Ready", accent: "bg-emerald-500/12 text-emerald-900 dark:text-emerald-300" },
 ];
 
-function minutesSince(ts, now) {
+function minutesSince(createdAt, now) {
+  const ts = new Date(createdAt).getTime();
   return Math.max(0, Math.floor((now - ts) / 60000));
 }
 
@@ -41,12 +43,22 @@ function priorityMeta(p) {
 }
 
 function OrderCard({ order, now, onAdvance }) {
-  const mins = minutesSince(order.createdAt, now);
+  const [loading, setLoading] = React.useState(false);
+  const mins = minutesSince(order.created_at, now);
   const elapsed = elapsedMeta(mins);
   const pr = priorityMeta(order.priority);
   const PriorityIcon = pr.icon;
 
   const isNew = mins <= 2 && order.status === "pending";
+
+  const handleAdvance = async () => {
+    setLoading(true);
+    try {
+      await onAdvance(order.id, order.status);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -82,8 +94,8 @@ function OrderCard({ order, now, onAdvance }) {
       <div className="relative p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Badge className="rounded-full bg-background/70">
-              Table <span className="ml-1 font-semibold tabular-nums">{order.table}</span>
+            <Badge className="rounded-full ">
+              Table <span className="ml-1 font-semibold tabular-nums">{order.table?.table_number}</span>
             </Badge>
             <Badge className={`rounded-full ${elapsed.badge}`}>{elapsed.label}</Badge>
             <Badge className={`rounded-full ${pr.badge}`}>
@@ -101,16 +113,16 @@ function OrderCard({ order, now, onAdvance }) {
         <Separator className="my-4" />
 
         <div className="space-y-2">
-          {order.items.map((x) => (
-            <div key={x} className="text-sm">
-              {x}
+          {order.items.map((item, idx) => (
+            <div key={idx} className="text-sm">
+              <span className="font-semibold tabular-nums">{item.quantity}x</span> {item.menu_item?.name}
             </div>
           ))}
         </div>
 
-        {order.notes ? (
+        {order.special_note ? (
           <div className="mt-4 rounded-2xl bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-300">
-            <span className="font-semibold">Notes:</span> {order.notes}
+            <span className="font-semibold">Notes:</span> {order.special_note}
           </div>
         ) : null}
 
@@ -118,18 +130,32 @@ function OrderCard({ order, now, onAdvance }) {
           {order.status !== "ready" ? (
             <Button
               className="h-11 w-full rounded-2xl bg-rms-gradient text-white shadow-glow"
-              onClick={() => onAdvance(order.id)}
+              onClick={handleAdvance}
+              disabled={loading}
             >
-              {order.status === "pending" ? "Start preparing" : "Mark ready"}
-              <MoveRightIcon className="ml-2 size-4" />
+              {loading ? (
+                <Loader2Icon className="mr-2 size-4 animate-spin" />
+              ) : (
+                <>
+                  {order.status === "pending" ? "Start preparing" : "Mark ready"}
+                  <MoveRightIcon className="ml-2 size-4" />
+                </>
+              )}
             </Button>
           ) : (
             <Button
               className="h-11 w-full rounded-2xl bg-emerald-500 text-white shadow-lux-sm hover:bg-emerald-600"
-              onClick={() => onAdvance(order.id)}
+              onClick={handleAdvance}
+              disabled={loading}
             >
-              Complete
-              <CheckCircle2Icon className="ml-2 size-4" />
+              {loading ? (
+                <Loader2Icon className="mr-2 size-4 animate-spin" />
+              ) : (
+                <>
+                  Complete
+                  <CheckCircle2Icon className="ml-2 size-4" />
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -140,31 +166,53 @@ function OrderCard({ order, now, onAdvance }) {
 
 export default function KitchenPage() {
   const [sound, setSound] = React.useState(false);
-  const [orders, setOrders] = React.useState(() => KDS_ORDERS);
+  const [orders, setOrders] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
   const [now, setNow] = React.useState(() => Date.now());
 
+  const fetchOrders = React.useCallback(async () => {
+    try {
+      const { data } = await apiClient.get("/kitchen/orders");
+      setOrders(data);
+    } catch (err) {
+      console.error("Failed to fetch kitchen orders:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   React.useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 15_000);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10_000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
+
+  React.useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(t);
   }, []);
 
   const counts = React.useMemo(() => {
     const base = { pending: 0, preparing: 0, ready: 0 };
-    for (const o of orders) base[o.status] += 1;
+    for (const o of orders) {
+      if (base.hasOwnProperty(o.status)) {
+        base[o.status] += 1;
+      }
+    }
     return base;
   }, [orders]);
 
-  const advance = (id) => {
-    setOrders((prev) =>
-      prev
-        .map((o) => {
-          if (o.id !== id) return o;
-          if (o.status === "pending") return { ...o, status: "preparing" };
-          if (o.status === "preparing") return { ...o, status: "ready" };
-          return null;
-        })
-        .filter(Boolean)
-    );
+  const advance = async (id, currentStatus) => {
+    let nextStatus = "preparing";
+    if (currentStatus === "preparing") nextStatus = "ready";
+    if (currentStatus === "ready") nextStatus = "served";
+
+    try {
+      await apiClient.patch(`/orders/${id}/status`, { status: nextStatus });
+      await fetchOrders();
+    } catch (err) {
+      console.error("Failed to update order status:", err);
+    }
   };
 
   return (
@@ -187,40 +235,46 @@ export default function KitchenPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {COLUMNS.map((col) => (
-          <div key={col.key} className="min-w-[320px] flex-1">
-            <div className="glass lux-card p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold">{col.label}</div>
-                <Badge className={`rounded-full ${col.accent}`}>
-                  {counts[col.key]}{" "}
-                </Badge>
-              </div>
-
-              <Separator className="my-4" />
-
-              <ScrollArea className="h-[520px] pr-3">
-                <div className="space-y-3">
-                  {orders
-                    .filter((o) => o.status === col.key)
-                    .map((o) => (
-                      <OrderCard key={o.id} order={o} now={now} onAdvance={advance} />
-                    ))}
-                  {orders.filter((o) => o.status === col.key).length === 0 ? (
-                    <div className="grid place-items-center rounded-2xl border bg-background/40 p-6 text-center">
-                      <div className="text-sm font-semibold">Nothing here</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Orders will appear automatically.
-                      </div>
-                    </div>
-                  ) : null}
+      {loading && orders.length === 0 ? (
+        <div className="flex h-96 items-center justify-center">
+          <Loader2Icon className="size-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-2">
+          {COLUMNS.map((col) => (
+            <div key={col.key} className="min-w-[320px] flex-1">
+              <div className="glass lux-card p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold">{col.label}</div>
+                  <Badge className={`rounded-full ${col.accent}`}>
+                    {counts[col.key]}{" "}
+                  </Badge>
                 </div>
-              </ScrollArea>
+
+                <Separator className="my-4" />
+
+                <ScrollArea className="h-[520px] pr-3">
+                  <div className="space-y-3">
+                    {orders
+                      .filter((o) => o.status === col.key)
+                      .map((o) => (
+                        <OrderCard key={o.id} order={o} now={now} onAdvance={advance} />
+                      ))}
+                    {orders.filter((o) => o.status === col.key).length === 0 ? (
+                      <div className="grid place-items-center rounded-2xl border bg-background/40 p-6 text-center">
+                        <div className="text-sm font-semibold">Nothing here</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Orders will appear automatically.
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </ScrollArea>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </PageTransition>
   );
 }
