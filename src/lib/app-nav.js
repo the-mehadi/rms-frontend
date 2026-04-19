@@ -19,6 +19,7 @@ export const NAV_GROUPS = [
   {
     label: "Operations",
     items: [
+      { href: "/floor-view", label: "Floor View", icon: LayoutDashboardIcon },
       { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
       { href: "/kitchen", label: "Kitchen", icon: CookingPotIcon },
       { href: "/billing", label: "Billing", icon: ReceiptTextIcon },
@@ -37,10 +38,10 @@ export const NAV_GROUPS = [
 
 export const MOBILE_TABS = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboardIcon },
+  { href: "/floor-view", label: "Floor", icon: LayoutDashboardIcon },
   { href: "/orders", label: "Orders", icon: ShoppingCartIcon },
   { href: "/kitchen", label: "Kitchen", icon: CookingPotIcon },
   { href: "/billing", label: "Bill", icon: ReceiptTextIcon },
   { href: "/tables", label: "Tables", icon: TableIcon },
-  { href: "/menu", label: "Menu", icon: NotebookPenIcon },
 ];
 

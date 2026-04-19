@@ -9,4 +9,8 @@ export const ordersAPI = {
     const response = await apiClient.patch(`/orders/${id}/status`, { status });
     return response.data;
   },
+  getByTable: async (tableId) => {
+    const response = await apiClient.get(`/orders/table/${tableId}`);
+    return response.data;
+  },
 };
