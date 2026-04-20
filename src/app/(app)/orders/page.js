@@ -400,7 +400,7 @@ export default function OrdersPage() {
                   </div>
                 </div>
                 <Badge className="rounded-full bg-muted text-muted-foreground">
-                  Selected: Table {selectedTable?.number}
+                  Selected: Table {selectedTable?.table_number}
                 </Badge>
               </div>
 

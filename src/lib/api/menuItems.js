@@ -1,9 +1,8 @@
-import apiClient from './client';
+import apiClient, { fetchGet, clearCache } from './client';
 
 export const menuItemsAPI = {
   getAll: async () => {
-    const response = await apiClient.get('/menu-items');
-    return response.data;
+    return fetchGet('/menu-items');
   },
 
   create: async (formData) => {
@@ -12,6 +11,7 @@ export const menuItemsAPI = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    clearCache('/menu-items');
     return response.data;
   },
 };

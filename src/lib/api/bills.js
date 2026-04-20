@@ -1,20 +1,26 @@
-import apiClient from "./client";
+import apiClient, { fetchGet, clearCache } from "./client";
+
+// Clear floor view localStorage cache
+function clearFloorViewCache() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('floorViewTables');
+  }
+}
 
 export const billsAPI = {
   getAll: async () => {
-    const response = await apiClient.get("/bills");
-    return response.data;
+    return fetchGet("/bills");
   },
   getById: async (id) => {
-    const response = await apiClient.get(`/bills/${id}`);
-    return response.data;
+    return fetchGet(`/bills/${id}`);
   },
   create: async (data) => {
     const response = await apiClient.post("/bills", data);
+    clearCache("/bills");
+    clearFloorViewCache();
     return response.data;
   },
   getReceipt: async (id) => {
-    const response = await apiClient.get(`/bills/${id}/receipt`);
-    return response.data;
+    return fetchGet(`/bills/${id}/receipt`);
   },
 };

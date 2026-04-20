@@ -15,22 +15,51 @@ import { getAllTablesData } from "@/lib/api/tables";
 import TableGrid from "@/components/floor-view/TableGrid";
 import SummaryStats from "@/components/floor-view/SummaryStats";
 
+// Cache key for floor view data
+const FLOOR_VIEW_CACHE_KEY = 'floorViewTables';
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+
+function getCachedData() {
+  if (typeof window === 'undefined') return null;
+  const cached = localStorage.getItem(FLOOR_VIEW_CACHE_KEY);
+  if (!cached) return null;
+  try {
+    const { data, timestamp } = JSON.parse(cached);
+    if (Date.now() - timestamp > CACHE_DURATION) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedData(data) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(FLOOR_VIEW_CACHE_KEY, JSON.stringify({
+    data,
+    timestamp: Date.now(),
+  }));
+}
+
 export default function FloorViewPage() {
   const router = useRouter();
   const [tables, setTables] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  const initialLoadDone = React.useRef(false);
 
-  const fetchData = React.useCallback(async (isRefresh = false) => {
+  const fetchData = React.useCallback(async (isRefresh = false, showLoading = true) => {
     try {
       if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      
+      else if (showLoading) setLoading(true);
+
       const data = await getAllTablesData();
       setTables(data);
+      setCachedData(data);
     } catch (error) {
       console.error("Floor map error:", error);
-      toast.error("Failed to load table map");
+      if (!isRefresh) {
+        toast.error("Failed to load table map");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -38,13 +67,22 @@ export default function FloorViewPage() {
   }, []);
 
   React.useEffect(() => {
-    fetchData();
-    
-    // Auto-refresh every 60 seconds
+    // Try to load cached data first for instant display
+    const cached = getCachedData();
+    if (cached) {
+      setTables(cached);
+      setLoading(false);
+    }
+
+    // Always fetch fresh data in background
+    fetchData(false, !cached);
+    initialLoadDone.current = true;
+
+    // Auto-refresh every 60 seconds (background refresh)
     const interval = setInterval(() => {
-      fetchData(true);
+      fetchData(true, false);
     }, 60000);
-    
+
     return () => clearInterval(interval);
   }, [fetchData]);
 
