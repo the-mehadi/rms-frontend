@@ -29,16 +29,22 @@ const TABLE_STYLES = {
 
 export default function TableCard({ table, onClick }) {
   const meta = TABLE_STYLES[table.status] || TABLE_STYLES.available;
+  const isBillable = table.status === "occupied" || table.status === "ready";
+  const accentTextClass = table.status === "ready" ? "text-rose-500" : "text-orange-500";
 
   return (
     <HoverLift className="w-full">
       <button
+        type="button"
         onClick={() => onClick(table)}
+        disabled={!isBillable}
         className={cn(
           "group relative aspect-square w-full overflow-hidden rounded-[2.5rem] border bg-background/40 p-6 text-left transition-all duration-300",
           meta.ring,
           meta.hover,
-          "hover:shadow-lux-sm active:scale-95"
+          isBillable
+            ? "hover:shadow-lux-sm active:scale-95"
+            : "cursor-not-allowed opacity-80"
         )}
       >
         <div className={cn("absolute inset-0 opacity-80 transition-opacity group-hover:opacity-100", meta.bg)} />
@@ -62,7 +68,7 @@ export default function TableCard({ table, onClick }) {
           </div>
 
           <div className="mt-auto space-y-2">
-            {table.status === 'occupied' && (
+            {isBillable && (
               <>
                 <div className="flex items-center justify-between border-t border-dashed border-muted-foreground/20 pt-3">
                   <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -71,7 +77,7 @@ export default function TableCard({ table, onClick }) {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm font-bold text-orange-500">
+                  <div className={cn("flex items-center gap-1.5 text-sm font-bold", accentTextClass)}>
                     <ReceiptIcon className="size-3.5" />
                     <span>{formatCurrency(table.current_bill_amount, "BDT")}</span>
                   </div>

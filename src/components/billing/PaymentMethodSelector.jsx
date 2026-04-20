@@ -7,12 +7,12 @@ const METHODS = [
   { key: "card", label: "Card", icon: CreditCardIcon, description: "Credit or Debit card" },
 ];
 
-export default function PaymentMethodSelector({ selectedMethod, onSelect }) {
+export default function PaymentMethodSelector({ selectedMethod, onSelect, disabled = false }) {
   return (
     <div className="glass-strong lux-card p-6">
       <div className="text-sm font-semibold">Payment method</div>
       <div className="mt-1 text-xs text-muted-foreground">
-        Select one to continue
+        {disabled ? "Locked after payment" : "Select one to continue"}
       </div>
 
       <div className="mt-5 grid gap-3">
@@ -22,12 +22,15 @@ export default function PaymentMethodSelector({ selectedMethod, onSelect }) {
           return (
             <button
               key={m.key}
+              type="button"
               onClick={() => onSelect(m.key)}
+              disabled={disabled}
               className={cn(
                 "flex items-center gap-3 rounded-3xl border bg-background/40 p-4 text-left transition-all duration-300",
                 active
                   ? "ring-4 ring-ring/25 shadow-glow border-transparent bg-background"
-                  : "hover:bg-muted/40"
+                  : "hover:bg-muted/40",
+                disabled && "cursor-not-allowed opacity-60 hover:bg-background/40"
               )}
             >
               <span

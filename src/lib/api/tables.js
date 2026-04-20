@@ -1,4 +1,5 @@
 import apiClient, { fetchGet, clearCache, getTableOrdersCache, setTableOrdersCache, clearTableOrdersCache } from "./client";
+import { normalizeTableOrdersResponse } from "@/lib/order-utils";
 
 export async function getTableOrders(tableId, useCache = true) {
   // Check centralized cache first
@@ -24,17 +25,21 @@ export async function getTableOrders(tableId, useCache = true) {
 export { clearTableOrdersCache };
 
 export const processTableData = (tableId, apiResponse) => {
-  const hasOrders = apiResponse?.success && apiResponse.data?.items?.length > 0;
+  const normalized = normalizeTableOrdersResponse(apiResponse, tableId);
+  const hasOrders = normalized.orderIds.length > 0 || normalized.rawItems.length > 0;
+  const hasReadyOrders = normalized.orders.some((order) => order.status === "ready");
+  const currentBillAmount = normalized.rawItems.reduce(
+    (sum, item) => sum + (Number(item.subtotal) || 0),
+    0
+  );
 
   return {
-    id: apiResponse?.data?.table?.id || tableId,
-    table_number: apiResponse?.data?.table?.table_number || tableId,
-    status: hasOrders ? 'occupied' : apiResponse?.data?.table?.status || 'available',
-    current_bill_amount: hasOrders
-      ? apiResponse.data.items.reduce((sum, item) => sum + parseFloat(item.subtotal || 0), 0)
-      : 0,
-    order_count: hasOrders ? apiResponse.data.items.length : 0,
-    capacity: apiResponse?.data?.table?.capacity || 0
+    id: normalized.table.id || tableId,
+    table_number: normalized.table.number || tableId,
+    status: hasOrders ? (hasReadyOrders ? "ready" : "occupied") : normalized.table.status,
+    current_bill_amount: hasOrders ? currentBillAmount : 0,
+    order_count: hasOrders ? normalized.rawItems.length : 0,
+    capacity: normalized.table.capacity || 0
   };
 };
 

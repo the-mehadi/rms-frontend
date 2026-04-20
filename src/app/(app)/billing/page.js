@@ -3,17 +3,16 @@
 import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PageTransition } from "@/components/motion/PageTransition";
-import { cn } from "@/lib/utils";
 import { BILL } from "@/lib/mock/billing";
-import { formatCurrency } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 // API
 import { ordersAPI } from "@/lib/api/orders";
-import { billsAPI } from "@/lib/api/bills";
 import { paymentsAPI } from "@/lib/api/payments";
+import { normalizeTableOrdersResponse } from "@/lib/order-utils";
 
 // Components
 import OrderItemsList from "@/components/billing/OrderItemsList";
@@ -33,6 +32,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+function roundMoney(value) {
+  return Number((Number(value) || 0).toFixed(2));
+}
+
+function buildReceiptNumber(responseData, tableId) {
+  const candidate =
+    responseData?.receipt_no ??
+    responseData?.receipt_number ??
+    responseData?.invoice_no ??
+    responseData?.payment_id ??
+    responseData?.bill_id;
+
+  if (candidate) return String(candidate);
+  return `PAY-${tableId}-${Date.now()}`;
+}
+
 export default function BillingPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -41,18 +56,24 @@ export default function BillingPage() {
   // State
   const [tableData, setTableData] = React.useState(null);
   const [orders, setOrders] = React.useState([]);
+  const [orderIds, setOrderIds] = React.useState([]);
+  const [receiptItems, setReceiptItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [processing, setProcessing] = React.useState(false);
-  
+  const [paymentComplete, setPaymentComplete] = React.useState(false);
+  const [receiptUrl, setReceiptUrl] = React.useState("");
+
   const [method, setMethod] = React.useState("cash");
   const [discount, setDiscount] = React.useState(0);
   const [discountEnabled, setDiscountEnabled] = React.useState(false);
   const [usePercent, setUsePercent] = React.useState(true);
-  
+
   const [showClearDialog, setShowClearDialog] = React.useState(false);
   const [billMeta, setBillMeta] = React.useState({
     receiptNo: "---",
     cashier: "Mehadi", // This should ideally come from auth context
+    paidAt: null,
+    billId: null,
   });
 
   // Fetch orders
@@ -60,19 +81,41 @@ export default function BillingPage() {
     try {
       setLoading(true);
       const response = await ordersAPI.getByTable(id);
-      
-      if (response.success && response.data) {
-        const orderData = response.data;
-        setOrders(orderData.items || []);
+
+      if (response?.success === false) {
+        setOrders([]);
+        setOrderIds([]);
+        setReceiptItems([]);
+        setTableData(null);
+        toast.info(response.message || "No unpaid orders found for this table.");
+        return;
+      }
+
+      const normalized = normalizeTableOrdersResponse(response, id);
+
+      setOrders(normalized.orders);
+      setOrderIds(normalized.orderIds);
+      setReceiptItems(normalized.mergedItems);
+      setPaymentComplete(false);
+      setReceiptUrl("");
+      setBillMeta((prev) => ({
+        ...prev,
+        receiptNo: "---",
+        paidAt: null,
+        billId: null,
+      }));
+
+      if (normalized.table?.id || normalized.table?.number) {
         setTableData({
-          id: orderData.table?.id || orderData.table_id,
-          number: orderData.table?.table_number || orderData.table_number
+          id: normalized.table.id,
+          number: normalized.table.number,
         });
       } else {
-        // Handle case where success is false or no data
-        setOrders([]);
         setTableData(null);
-        toast.info(response.message || "No active order found for this table.");
+      }
+
+      if (normalized.mergedItems.length === 0 || normalized.orderIds.length === 0) {
+        toast.info("No unpaid orders found for this table.");
       }
     } catch (error) {
       console.error("Fetch error:", error);
@@ -91,84 +134,163 @@ export default function BillingPage() {
   }, [tableIdFromUrl, fetchOrders]);
 
   // Calculations
-  const subtotal = orders.reduce((sum, it) => sum + (Number(it.subtotal || it.total) || 0), 0);
-  
+  const subtotal = React.useMemo(
+    () => roundMoney(receiptItems.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0)),
+    [receiptItems]
+  );
+
   const discountAmount = React.useMemo(() => {
     if (!discountEnabled) return 0;
     const val = Number(discount) || 0;
     if (usePercent) {
-      return (subtotal * Math.min(100, Math.max(0, val))) / 100;
+      return roundMoney((subtotal * Math.min(100, Math.max(0, val))) / 100);
     }
-    return Math.min(subtotal, Math.max(0, val));
+    return roundMoney(Math.min(subtotal, Math.max(0, val)));
   }, [discountEnabled, usePercent, discount, subtotal]);
 
-  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const afterDiscount = roundMoney(Math.max(0, subtotal - discountAmount));
   const vatRate = 0.05; // 5% VAT
-  const vat = afterDiscount * vatRate;
-  const total = afterDiscount + vat;
+  const vat = roundMoney(afterDiscount * vatRate);
+  const total = roundMoney(afterDiscount + vat);
+
+  const receiptShareText = React.useMemo(() => {
+    return [
+      `Restaurant: ${BILL.restaurant.name}`,
+      `Table: ${tableData?.number ?? tableIdFromUrl ?? "-"}`,
+      `Receipt: ${billMeta.receiptNo}`,
+      `Orders: ${orderIds.length > 0 ? orderIds.join(", ") : "-"}`,
+      `Status: ${paymentComplete ? "PAID" : "PENDING PAYMENT"}`,
+      `Method: ${method.toUpperCase()}`,
+      `Subtotal: ${subtotal}`,
+      `VAT: ${vat}`,
+      `Discount: ${discountAmount}`,
+      `Grand Total: ${total}`,
+      receiptUrl ? `Receipt URL: ${receiptUrl}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [
+    billMeta.receiptNo,
+    discountAmount,
+    method,
+    orderIds,
+    paymentComplete,
+    receiptUrl,
+    subtotal,
+    tableData?.number,
+    tableIdFromUrl,
+    total,
+    vat,
+  ]);
+
+  const qrCodeUrl = React.useMemo(() => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+      receiptShareText
+    )}`;
+  }, [receiptShareText]);
 
   // Handlers
-  const handlePrintReceipt = async () => {
-    if (orders.length === 0) {
+  const processPayment = React.useCallback(async () => {
+    if (receiptItems.length === 0 || orderIds.length === 0) {
       toast.error("No orders to bill");
+      return null;
+    }
+
+    if (paymentComplete) {
+      return {
+        receiptNo: billMeta.receiptNo,
+        billId: billMeta.billId,
+      };
+    }
+
+    setProcessing(true);
+
+    try {
+      const payload = {
+        table_id: Number(tableIdFromUrl) || tableIdFromUrl,
+        order_ids: orderIds,
+        method,
+        subtotal,
+        vat,
+        discount: discountAmount,
+        grand_total: total,
+      };
+
+      const response = await paymentsAPI.process(payload);
+
+      if (response?.success === false) {
+        throw new Error(response.message || "Failed to process payment");
+      }
+
+      const responseData = response?.data ?? response ?? {};
+      const billId = responseData?.bill_id ?? null;
+      const receiptNo = buildReceiptNumber(responseData, tableIdFromUrl);
+      const nextReceiptUrl =
+        billId && process.env.NEXT_PUBLIC_API_BASE_URL
+          ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/bills/${billId}/receipt`
+          : "";
+
+      setPaymentComplete(true);
+      setReceiptUrl(nextReceiptUrl);
+      setBillMeta((prev) => ({
+        ...prev,
+        receiptNo,
+        billId,
+        paidAt: new Date().toISOString(),
+      }));
+
+      toast.success("Payment completed. Table is now free.");
+
+      return {
+        receiptNo,
+        billId,
+      };
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast.error(error.response?.data?.message || error.message || "Failed to process payment");
+      return null;
+    } finally {
+      setProcessing(false);
+    }
+  }, [
+    billMeta.billId,
+    billMeta.receiptNo,
+    discountAmount,
+    method,
+    orderIds,
+    paymentComplete,
+    receiptItems.length,
+    subtotal,
+    tableIdFromUrl,
+    total,
+    vat,
+  ]);
+
+  const handlePrintReceipt = async () => {
+    const result = await processPayment();
+    if (!result) return;
+
+    window.print();
+  };
+
+  const handleEmailReceipt = async () => {
+    if (!paymentComplete) {
+      toast.info("Complete payment before sending the receipt.");
       return;
     }
 
     try {
       setProcessing(true);
-      
-      // 1. Create Bill
-      const billData = {
-        table_id: tableIdFromUrl,
-        items: orders.map(it => ({
-          order_item_id: it.id,
-          name: it.menu_item?.name || it.item_name,
-          qty: it.quantity,
-          price: it.price || it.unit_price,
-          total: it.subtotal || it.total
-        })),
-        subtotal,
-        discount: discountAmount,
-        vat,
-        grand_total: total,
-        payment_method: method
-      };
 
-      const billResponse = await billsAPI.create(billData);
-      
-      if (billResponse.success) {
-        setBillMeta(prev => ({ ...prev, receiptNo: billResponse.bill_id }));
-        
-        // 2. Process Payment (In a real app, this might be separate, but following requirements)
-        await paymentsAPI.process({
-          bill_id: billResponse.bill_id,
-          payment_method: method,
-          amount: total
-        });
+      const subject = encodeURIComponent(
+        `Receipt ${billMeta.receiptNo} - Table ${tableData?.number ?? tableIdFromUrl}`
+      );
+      const body = encodeURIComponent(
+        `${receiptShareText}${receiptUrl ? `\n\nOpen receipt: ${receiptUrl}` : ""}`
+      );
 
-        toast.success("Bill created and payment processed!");
-
-        // 3. Trigger Print (Simulated for web, usually opens PDF or new window)
-        // const receipt = await billsAPI.getReceipt(billResponse.bill_id);
-        window.print();
-      }
-    } catch (error) {
-      console.error("Billing error:", error);
-      toast.error(error.response?.data?.message || "Failed to process billing");
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleEmailReceipt = async () => {
-    if (orders.length === 0) return;
-    
-    try {
-      setProcessing(true);
-      // Implementation similar to print but calls an email endpoint if available
-      // For now, simulate success
-      await new Promise(r => setTimeout(r, 1000));
-      toast.success("Receipt sent to customer email!");
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+      toast.success("Receipt prepared in your email client.");
     } catch (error) {
       toast.error("Failed to send email");
     } finally {
@@ -177,13 +299,21 @@ export default function BillingPage() {
   };
 
   const handleClear = () => {
+    if (paymentComplete) {
+      toast.info("Return to floor view to start a new billing session.");
+      return;
+    }
+
     setMethod("cash");
     setDiscount(0);
     setDiscountEnabled(false);
     setUsePercent(true);
+    setReceiptUrl("");
     setBillMeta({
       receiptNo: "---",
       cashier: "Mehadi",
+      paidAt: null,
+      billId: null,
     });
     toast.info("Form cleared");
   };
@@ -202,6 +332,9 @@ export default function BillingPage() {
             <div className="flex gap-2">
               <Badge className="rounded-full bg-muted text-muted-foreground">
                 {tableData ? `Table ${tableData.number}` : "No Table Selected"}
+              </Badge>
+              <Badge className="rounded-full bg-muted text-muted-foreground">
+                {orderIds.length} unpaid order{orderIds.length === 1 ? "" : "s"}
               </Badge>
               <Badge className="rounded-full bg-primary/10 text-primary border-primary/20">
                 {billMeta.receiptNo}
@@ -246,6 +379,10 @@ export default function BillingPage() {
                 <div className="text-right font-medium text-foreground">
                   {billMeta.cashier}
                 </div>
+                <div>Status</div>
+                <div className="text-right font-medium text-foreground">
+                  {paymentComplete ? "Paid" : "Unpaid"}
+                </div>
                 <div>Table</div>
                 <div className="text-right font-medium text-foreground">
                   {tableData?.number || "---"}
@@ -254,7 +391,7 @@ export default function BillingPage() {
 
               <Separator className="my-5" />
 
-              <OrderItemsList items={orders} loading={loading} />
+              <OrderItemsList items={receiptItems} loading={loading} />
 
               <Separator className="my-5" />
 
@@ -269,7 +406,7 @@ export default function BillingPage() {
               <div className="mt-8 pt-6 border-t border-dashed text-center">
                 <div className="text-sm font-semibold">Payment: {method.toUpperCase()}</div>
                 <div className="mt-2 text-[10px] text-muted-foreground uppercase tracking-widest">
-                  Thank you for dining with us!
+                  {paymentComplete ? "Thank you for dining with us!" : "Awaiting payment confirmation"}
                 </div>
               </div>
 
@@ -277,13 +414,15 @@ export default function BillingPage() {
                 <div>
                   <div className="text-sm font-semibold">Digital receipt</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Scan for digital copy
+                    {paymentComplete ? "Scan for digital copy" : "QR updates after payment"}
                   </div>
                 </div>
-                <div className="grid aspect-square w-full place-items-center rounded-2xl bg-background ring-1 ring-border">
-                  <div className="grid size-12 place-items-center rounded-xl border bg-muted/30 text-[10px] font-semibold text-muted-foreground">
-                    QR
-                  </div>
+                <div className="grid aspect-square w-full place-items-center overflow-hidden rounded-2xl bg-background ring-1 ring-border">
+                  <img
+                    src={qrCodeUrl}
+                    alt="Receipt QR code"
+                    className="h-full w-full object-cover"
+                  />
                 </div>
               </div>
             </section>
@@ -293,6 +432,7 @@ export default function BillingPage() {
               <PaymentMethodSelector 
                 selectedMethod={method} 
                 onSelect={setMethod} 
+                disabled={paymentComplete}
               />
 
               <DiscountInput 
@@ -302,6 +442,7 @@ export default function BillingPage() {
                 setUsePercent={setUsePercent}
                 enabled={discountEnabled}
                 setEnabled={setDiscountEnabled}
+                disabled={paymentComplete}
               />
 
               <BillActions 
@@ -309,8 +450,26 @@ export default function BillingPage() {
                 onEmail={handleEmailReceipt}
                 onClear={() => setShowClearDialog(true)}
                 processing={processing}
-                hasOrders={orders.length > 0}
+                hasOrders={receiptItems.length > 0}
+                paymentComplete={paymentComplete}
               />
+
+              {paymentComplete && (
+                <div className="glass-strong lux-card space-y-3 p-6">
+                  <div className="text-sm font-semibold">Payment completed</div>
+                  <div className="text-xs text-muted-foreground">
+                    Table {tableData?.number ?? tableIdFromUrl} is released. Return to the floor
+                    view to continue with the next table.
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="h-11 w-full rounded-2xl"
+                    onClick={() => router.push("/floor-view")}
+                  >
+                    Back to Floor View
+                  </Button>
+                </div>
+              )}
             </aside>
           </div>
         </div>

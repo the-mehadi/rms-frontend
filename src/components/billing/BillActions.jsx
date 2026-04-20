@@ -1,7 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { PrinterIcon, MailIcon, Trash2Icon, Loader2Icon } from "lucide-react";
 
-export default function BillActions({ onPrint, onEmail, onClear, processing, hasOrders }) {
+export default function BillActions({
+  onPrint,
+  onEmail,
+  onClear,
+  processing,
+  hasOrders,
+  paymentComplete = false,
+}) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
       <Button 
@@ -14,13 +21,13 @@ export default function BillActions({ onPrint, onEmail, onClear, processing, has
         ) : (
           <PrinterIcon className="mr-2 size-4" />
         )}
-        Print receipt
+        {paymentComplete ? "Print receipt" : "Pay & print receipt"}
       </Button>
 
       <Button 
         variant="secondary" 
         onClick={onEmail}
-        disabled={processing || !hasOrders}
+        disabled={processing || !hasOrders || !paymentComplete}
         className="h-12 rounded-2xl"
       >
         <MailIcon className="mr-2 size-4" />

@@ -8,7 +8,8 @@ export default function DiscountInput({
   usePercent, 
   setUsePercent,
   enabled,
-  setEnabled
+  setEnabled,
+  disabled = false,
 }) {
   return (
     <div className="glass-strong lux-card p-6">
@@ -16,10 +17,10 @@ export default function DiscountInput({
         <div>
           <div className="text-sm font-semibold">Apply Discount</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Enable to subtract from total
+            {disabled ? "Locked after payment" : "Enable to subtract from total"}
           </div>
         </div>
-        <Switch checked={enabled} onCheckedChange={setEnabled} />
+        <Switch checked={enabled} onCheckedChange={setEnabled} disabled={disabled} />
       </div>
 
       {enabled && (
@@ -30,7 +31,7 @@ export default function DiscountInput({
             </div>
             <div className="flex items-center gap-2 rounded-2xl border bg-background/40 px-3 py-1.5">
               <span className={`text-[10px] font-bold ${!usePercent ? 'text-foreground' : 'text-muted-foreground'}`}>BDT</span>
-              <Switch checked={usePercent} onCheckedChange={setUsePercent} />
+              <Switch checked={usePercent} onCheckedChange={setUsePercent} disabled={disabled} />
               <PercentIcon className={`size-3 ${usePercent ? 'text-foreground' : 'text-muted-foreground'}`} />
             </div>
           </div>
@@ -43,6 +44,7 @@ export default function DiscountInput({
               min="0"
               max={usePercent ? "100" : undefined}
               placeholder={usePercent ? "Enter percentage (0-100)" : "Enter amount in BDT"}
+              disabled={disabled}
               className="h-11 rounded-2xl focus-lux"
             />
             <div className="mt-2 text-[10px] text-muted-foreground">
