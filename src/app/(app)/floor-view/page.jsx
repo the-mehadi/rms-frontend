@@ -20,7 +20,6 @@ const FLOOR_VIEW_CACHE_KEY = 'floorViewTables';
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 function getCachedData() {
-  if (typeof window === 'undefined') return null;
   const cached = localStorage.getItem(FLOOR_VIEW_CACHE_KEY);
   if (!cached) return null;
   try {
