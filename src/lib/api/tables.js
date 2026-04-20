@@ -3,6 +3,7 @@ import apiClient from "./client";
 export async function getTableOrders(tableId) {
   try {
     const response = await apiClient.get(`/orders/table/${tableId}`);
+    console.log(`Table ${tableId} orders:`, response.data);
     return response.data;
   } catch (error) {
     console.error(`Error fetching table ${tableId}:`, error);
@@ -25,16 +26,37 @@ export const processTableData = (tableId, apiResponse) => {
   };
 };
 
+// fetches actual tables from backend first, then fetches orders for each table
 export async function getAllTablesData() {
-  const tableCount = 15; // Standard restaurant size for this app
-  const promises = [];
-  
-  for (let i = 1; i <= tableCount; i++) {
-    promises.push(getTableOrders(i));
+  try {
+    // Step 1: Get all tables from backend
+    const tablesResponse = await apiClient.get('/tables');
+    console.log('Tables from backend:', tablesResponse.data);
+    
+    // Extract tables array from response
+    const tables = tablesResponse.data?.data || tablesResponse.data || [];
+    
+    if (!tables || tables.length === 0) {
+      console.warn('No tables found in backend');
+      return [];
+    }
+    
+    // Step 2: For each table, fetch order details
+    const promises = tables.map(table => getTableOrders(table.id));
+    const results = await Promise.all(promises);
+    
+    // Step 3: Process and combine data
+    return results.map((result, index) => {
+      const table = tables[index];
+      return processTableData(table.id, result);
+    });
+    
+  } catch (error) {
+    console.error('Error fetching all tables data:', error);
+    
+    // Fallback: If /tables endpoint doesn't exist, return empty
+    return [];
   }
-  
-  const results = await Promise.all(promises);
-  return results.map((result, index) => processTableData(index + 1, result));
 }
 
 export const tablesAPI = {

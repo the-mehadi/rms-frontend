@@ -353,7 +353,7 @@ export default function OrdersPage() {
 
     try {
       setSubmittingOrder(true);
-      await ordersAPI.create({
+      const response = await ordersAPI.create({
         table_id: selectedTable.id,
         status: "pending",
         notes: notes || null,
@@ -363,12 +363,20 @@ export default function OrdersPage() {
           unit_price: item.price,
         })),
       });
-      setCart({});
-      setNotes("");      
-      toast.success("Order submitted successfully.");
+
+      const result = response.data;
+
+      if (result.success === false) {
+        toast.error(result.message || "Failed to submit order");
+      } else {
+        setCart({});
+        setNotes("");
+        toast.success(result.message || "Order submitted successfully.");
+        fetchTables(); // Refresh tables to show occupied state
+      }
     } catch (error) {
-      console.error("Failed to submit order:", error);
-      toast.error("Failed to submit order");
+      const errorMessage = error.response?.data?.message || error.message || "Failed to submit order";
+      toast.error(errorMessage);
     } finally {
       setSubmittingOrder(false);
     }
