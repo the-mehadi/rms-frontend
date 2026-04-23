@@ -75,6 +75,11 @@ export default function TableCard({ table, onClick }) {
                     <ShoppingBagIcon className="size-3.5" />
                     <span>{table.order_count} Items</span>
                   </div>
+                  {table.order_status && (
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                      {table.order_status}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className={cn("flex items-center gap-1.5 text-sm font-bold", accentTextClass)}>

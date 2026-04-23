@@ -74,9 +74,42 @@ export async function getAllTablesData() {
   }
 }
 
+// New optimized function: Single API call for floor view data
+export async function getFloorViewData() {
+  try {
+    const response = await apiClient.get('/floor-view');
+
+    if (!response.data || !response.data.success) {
+      throw new Error('Invalid response format');
+    }
+
+    const { tables, summary } = response.data.data;
+
+    // Map tables to expected format
+    const processedTables = tables.map(table => ({
+      id: table.id,
+      table_number: table.table_number,
+      capacity: table.capacity,
+      status: table.unpaid_order && table.unpaid_order.order_status === "ready" ? "ready" : table.status,
+      current_bill_amount: table.unpaid_order ? table.unpaid_order.subtotal : 0,
+      order_count: table.unpaid_order ? table.unpaid_order.items_count : 0,
+      order_status: table.unpaid_order ? table.unpaid_order.order_status : null
+    }));
+
+    return {
+      tables: processedTables,
+      summary
+    };
+  } catch (error) {
+    console.error('Error fetching floor view data:', error);
+    throw error;
+  }
+}
+
 export const tablesAPI = {
   getTableOrders,
   getAllTablesData,
+  getFloorViewData,
   processTableData,
   clearTableOrdersCache,
   getAll: async () => {

@@ -9,7 +9,7 @@ import { RefreshCcwIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // API
-import { getAllTablesData } from "@/lib/api/tables";
+import { getFloorViewData } from "@/lib/api/tables";
 
 // Components
 import TableGrid from "@/components/floor-view/TableGrid";
@@ -41,7 +41,7 @@ function setCachedData(data) {
 
 export default function FloorViewPage() {
   const router = useRouter();
-  const [tables, setTables] = React.useState([]);
+  const [data, setData] = React.useState({ tables: [], summary: {} });
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
   const initialLoadDone = React.useRef(false);
@@ -51,9 +51,9 @@ export default function FloorViewPage() {
       if (isRefresh) setRefreshing(true);
       else if (showLoading) setLoading(true);
 
-      const data = await getAllTablesData();
-      setTables(data);
-      setCachedData(data);
+      const result = await getFloorViewData();
+      setData(result);
+      setCachedData(result);
     } catch (error) {
       console.error("Floor map error:", error);
       if (!isRefresh) {
@@ -69,7 +69,7 @@ export default function FloorViewPage() {
     // Try to load cached data first for instant display
     const cached = getCachedData();
     if (cached) {
-      setTables(cached);
+      setData(cached);
       setLoading(false);
     }
 
@@ -84,16 +84,6 @@ export default function FloorViewPage() {
 
     return () => clearInterval(interval);
   }, [fetchData]);
-
-  const stats = React.useMemo(() => {
-    return {
-      total: tables.length,
-      available: tables.filter(t => t.status === 'available').length,
-      occupied: tables.filter(t => t.status === 'occupied').length,
-      reserved: tables.filter(t => t.status === 'reserved').length,
-      ready: tables.filter(t => t.status === 'ready').length,
-    };
-  }, [tables]);
 
   const handleTableClick = (table) => {
     if (table.status === 'occupied' || table.status === 'ready') {
@@ -141,13 +131,13 @@ export default function FloorViewPage() {
 
           <Separator className="my-6" />
           
-          <SummaryStats stats={stats} />
+          <SummaryStats summary={data.summary} />
         </div>
 
         {/* Main Grid Section */}
         <div className="mt-8">
           <TableGrid 
-            tables={tables} 
+            tables={data.tables} 
             loading={loading} 
             onTableClick={handleTableClick} 
           />

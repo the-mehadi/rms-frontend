@@ -40,7 +40,7 @@ const STAT_ITEMS = [
   }
 ];
 
-export default function SummaryStats({ stats }) {
+export default function SummaryStats({ summary }) {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
       {STAT_ITEMS.map((item) => (
@@ -53,7 +53,9 @@ export default function SummaryStats({ stats }) {
           </div>
           <div>
             <div className="text-xl font-bold tracking-tight tabular-nums">
-              {stats[item.id] || 0}
+              {item.id === 'total' ? (summary.total_tables || 0) : 
+               item.id === 'ready' ? (summary.ready_to_bill || 0) : 
+               (summary[item.id] || 0)}
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {item.label}
