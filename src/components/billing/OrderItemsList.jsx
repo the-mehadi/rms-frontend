@@ -37,7 +37,7 @@ export default function OrderItemsList({ items, loading }) {
           key={it.id}
           className="grid grid-cols-[1fr_52px_96px] items-center gap-2 rounded-2xl px-2 py-2 hover:bg-muted/40 transition-colors"
         >
-          <div className="truncate text-sm font-medium">{it.menu_item?.name || it.item_name}</div>
+          <div className="truncate text-sm font-medium">{it.name}</div>
           <div className="text-right text-sm tabular-nums text-muted-foreground">
             {it.quantity}
           </div>

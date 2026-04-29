@@ -439,7 +439,7 @@ export default function BillingPageContent() {
                     {paymentComplete ? "Scan for digital copy" : "QR updates after payment"}
                   </div>
                 </div>
-                <div className="relative grid aspect-square w-full place-items-center overflow-hidden rounded-2xl bg-background ring-1 ring-border">
+                <div className="relative grid aspect-square w-full place-items-center overflow-hidden rounded  bg-background ring-1 ring-border">
                   <Image
                     src={qrCodeUrl}
                     alt="Receipt QR code"
