@@ -1,6 +1,14 @@
 import apiClient, { fetchGet, clearCache, getTableOrdersCache, setTableOrdersCache, clearTableOrdersCache } from "./client";
 import { normalizeTableOrdersResponse } from "@/lib/order-utils";
 
+export function isReadyToBill(table) {
+  return (
+    table?.status === "occupied" &&
+    table?.unpaid_order !== null &&
+    String(table?.unpaid_order?.order_status ?? "").toLowerCase() === "served"
+  );
+}
+
 export async function getTableOrders(tableId, useCache = true) {
   // Check centralized cache first
   if (useCache) {
@@ -83,22 +91,44 @@ export async function getFloorViewData() {
       throw new Error('Invalid response format');
     }
 
-    const { tables, summary } = response.data.data;
+    const payload = response.data.data ?? {};
+    const tables = Array.isArray(payload.tables) ? payload.tables : [];
+    const summary = payload.summary ?? {};
 
-    // Map tables to expected format
-    const processedTables = tables.map(table => ({
+    const processedTables = tables.map((table) => ({
       id: table.id,
       table_number: table.table_number,
       capacity: table.capacity,
-      status: table.unpaid_order && table.unpaid_order.order_status === "ready" ? "ready" : table.status,
-      current_bill_amount: table.unpaid_order ? table.unpaid_order.subtotal : 0,
-      order_count: table.unpaid_order ? table.unpaid_order.items_count : 0,
-      order_status: table.unpaid_order ? table.unpaid_order.order_status : null
+      status: table.status,
+      unpaid_order: table.unpaid_order
+        ? {
+            order_id: table.unpaid_order.order_id,
+            order_status: table.unpaid_order.order_status,
+            items_count: table.unpaid_order.items_count,
+            subtotal: Number(table.unpaid_order.subtotal) || 0,
+            created_at: table.unpaid_order.created_at,
+            waiter_name: table.unpaid_order.waiter_name,
+          }
+        : null,
     }));
+
+    const readyToBillCount = processedTables.filter(isReadyToBill).length;
+    const occupiedCount = processedTables.filter(
+      (table) => table.status === "occupied" && !isReadyToBill(table)
+    ).length;
+    const availableCount = processedTables.filter((table) => table.status === "available").length;
+    const reservedCount = processedTables.filter((table) => table.status === "reserved").length;
 
     return {
       tables: processedTables,
-      summary
+      summary: {
+        total_tables: Number(summary.total_tables) || processedTables.length,
+        available: availableCount,
+        occupied: occupiedCount,
+        reserved: reservedCount,
+        ready_to_bill: readyToBillCount,
+        total_unpaid_amount: Number(summary.total_unpaid_amount) || 0,
+      },
     };
   } catch (error) {
     console.error('Error fetching floor view data:', error);

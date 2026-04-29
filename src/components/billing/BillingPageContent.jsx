@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useSearchParams, useRouter } from "next/navigation";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { BILL } from "@/lib/mock/billing";
+import { formatCurrency } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -52,7 +53,10 @@ function buildReceiptNumber(responseData, tableId) {
 export default function BillingPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const tableIdFromUrl = searchParams.get("table_id");
+  const tableIdFromUrl = searchParams.get("table_id") ?? searchParams.get("tableId");
+  const tableNumberFromUrl = searchParams.get("table") ?? searchParams.get("tableNumber");
+  const orderIdFromUrl = searchParams.get("order") ?? searchParams.get("orderId");
+  const amountFromUrl = searchParams.get("amount");
 
   // State
   const [tableData, setTableData] = React.useState(null);
@@ -112,7 +116,14 @@ export default function BillingPageContent() {
           number: normalized.table.number,
         });
       } else {
-        setTableData(null);
+        setTableData(
+          tableIdFromUrl || tableNumberFromUrl
+            ? {
+                id: tableIdFromUrl ?? null,
+                number: tableNumberFromUrl ?? tableIdFromUrl,
+              }
+            : null
+        );
       }
 
       if (normalized.mergedItems.length === 0 || normalized.orderIds.length === 0) {
@@ -124,7 +135,7 @@ export default function BillingPageContent() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tableIdFromUrl, tableNumberFromUrl]);
 
   React.useEffect(() => {
     if (tableIdFromUrl) {
@@ -132,7 +143,7 @@ export default function BillingPageContent() {
     } else {
       setLoading(false);
     }
-  }, [tableIdFromUrl, fetchOrders]);
+  }, [fetchOrders, tableIdFromUrl, tableNumberFromUrl]);
 
   // Calculations
   const subtotal = React.useMemo(
@@ -337,6 +348,16 @@ export default function BillingPageContent() {
               <Badge className="rounded-full bg-muted text-muted-foreground">
                 {orderIds.length} unpaid order{orderIds.length === 1 ? "" : "s"}
               </Badge>
+              {orderIdFromUrl ? (
+                <Badge className="rounded-full bg-muted text-muted-foreground">
+                  Order #{orderIdFromUrl}
+                </Badge>
+              ) : null}
+              {amountFromUrl ? (
+                <Badge className="rounded-full bg-muted text-muted-foreground">
+                  Est. {formatCurrency(amountFromUrl, "BDT")}
+                </Badge>
+              ) : null}
               <Badge className="rounded-full bg-primary/10 text-primary border-primary/20">
                 {billMeta.receiptNo}
               </Badge>

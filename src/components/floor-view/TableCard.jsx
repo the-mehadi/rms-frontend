@@ -1,103 +1,100 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { UsersIcon, ReceiptIcon, ShoppingBagIcon } from "lucide-react";
-import { formatCurrency } from "@/lib/format";
-import StatusBadge from "./StatusBadge";
-import { HoverLift } from "@/components/motion/HoverLift";
+import { ShoppingBag, Users } from "lucide-react";
+import { TABLE_STATUS_COLORS } from "./floor-view-config";
 
-const TABLE_STYLES = {
-  available: {
-    ring: "ring-emerald-400/20",
-    bg: "bg-[radial-gradient(120px_120px_at_30%_20%,rgba(16,185,129,0.15)_0%,transparent_60%)]",
-    hover: "hover:border-emerald-500/30"
-  },
-  occupied: {
-    ring: "ring-orange-400/20",
-    bg: "bg-[radial-gradient(120px_120px_at_30%_20%,rgba(255,107,53,0.15)_0%,transparent_60%)]",
-    hover: "hover:border-orange-500/30"
-  },
-  reserved: {
-    ring: "ring-gray-400/20",
-    bg: "bg-[radial-gradient(120px_120px_at_30%_20%,rgba(156,163,175,0.15)_0%,transparent_60%)]",
-    hover: "hover:border-gray-500/30"
-  },
-  ready: {
-    ring: "ring-rose-400/20",
-    bg: "bg-[radial-gradient(120px_120px_at_30%_20%,rgba(239,68,68,0.15)_0%,transparent_60%)]",
-    hover: "hover:border-rose-500/30"
-  }
-};
+export default function TableCard({ table, displayStatus, onClick, onBillingClick }) {
+  const statusColors = TABLE_STATUS_COLORS[displayStatus] || TABLE_STATUS_COLORS.available;
+  const isClickable = displayStatus !== "reserved";
+  const isReadyToBill = displayStatus === "ready_to_bill";
+  const order = table.unpaid_order;
 
-export default function TableCard({ table, onClick }) {
-  const meta = TABLE_STYLES[table.status] || TABLE_STYLES.available;
-  const isBillable = table.status === "occupied" || table.status === "ready";
-  const accentTextClass = table.status === "ready" ? "text-rose-500" : "text-orange-500";
+  const handleCardClick = () => {
+    if (!isClickable) return;
+    onClick(table, displayStatus);
+  };
+
+  const handleBillingClick = (event) => {
+    event.stopPropagation();
+    onBillingClick(table);
+  };
 
   return (
-    <HoverLift className="w-full">
-      <button
-        type="button"
-        onClick={() => onClick(table)}
-        disabled={!isBillable}
-        className={cn(
-          "group relative aspect-square w-full overflow-hidden rounded-[2.5rem] border bg-background/40 p-6 text-left transition-all duration-300",
-          meta.ring,
-          meta.hover,
-          isBillable
-            ? "hover:shadow-lux-sm active:scale-95"
-            : "cursor-not-allowed opacity-80"
-        )}
-      >
-        <div className={cn("absolute inset-0 opacity-80 transition-opacity group-hover:opacity-100", meta.bg)} />
-        
-        <div className="relative flex h-full flex-col">
-          <div className="flex items-center justify-between gap-2">
-            <StatusBadge status={table.status} />
-            <div className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-              <UsersIcon className="size-3" />
-              {table.capacity}
-            </div>
-          </div>
-          
-          <div className="mt-4">
-            <div className="text-4xl font-bold tracking-tight tabular-nums text-foreground/90">
-              {table.table_number}
-            </div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
-              Table
-            </div>
-          </div>
+    <Card
+      onClick={handleCardClick}
+      className={cn(
+        "min-h-[180px] rounded-2xl border-2 py-0 shadow-lg transition-all duration-300 md:min-h-[200px]",
+        statusColors.bg,
+        statusColors.border,
+        isClickable ? "cursor-pointer hover:scale-105 hover:shadow-xl" : "cursor-default",
+        isReadyToBill && "animate-pulse"
+      )}
+    >
+      <CardContent className="flex h-full flex-col p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <Badge
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold uppercase shadow-none",
+              statusColors.badge
+            )}
+          >
+            <span className={cn("h-2 w-2 rounded-full", statusColors.dot)} />
+            {statusColors.label}
+          </Badge>
 
-          <div className="mt-auto space-y-2">
-            {isBillable && (
-              <>
-                <div className="flex items-center justify-between border-t border-dashed border-muted-foreground/20 pt-3">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <ShoppingBagIcon className="size-3.5" />
-                    <span>{table.order_count} Items</span>
-                  </div>
-                  {table.order_status && (
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                      {table.order_status}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className={cn("flex items-center gap-1.5 text-sm font-bold", accentTextClass)}>
-                    <ReceiptIcon className="size-3.5" />
-                    <span>{formatCurrency(table.current_bill_amount, "BDT")}</span>
-                  </div>
-                </div>
-              </>
-            )}
-            
-            {table.status === 'available' && (
-              <div className="flex items-center justify-center rounded-2xl bg-muted/20 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">
-                Ready for guest
-              </div>
-            )}
+          <div className="flex items-center gap-1 text-sm font-medium text-gray-600">
+            <Users className="h-4 w-4" />
+            <span>{table.capacity}</span>
           </div>
         </div>
-      </button>
-    </HoverLift>
+
+        <div className="mb-4 text-center">
+          <div className="text-5xl font-black text-gray-900 md:text-6xl">
+            {table.table_number}
+          </div>
+          <div className="mt-2 text-sm font-medium tracking-wider text-gray-500 uppercase">
+            TABLE
+          </div>
+        </div>
+
+        <div className="mt-auto">
+          {displayStatus === "available" ? (
+            <div className="text-center text-sm font-medium tracking-wide text-gray-500 uppercase">
+              READY FOR GUEST
+            </div>
+          ) : order ? (
+            <>
+              <div className="mb-2 flex items-center gap-2 text-sm text-gray-600">
+                <ShoppingBag className="h-4 w-4" />
+                <span>{order.items_count} Items</span>
+              </div>
+
+              <Badge className="rounded bg-blue-100 px-2 py-1 text-xs font-semibold uppercase text-blue-700 shadow-none">
+                {order.order_status}
+              </Badge>
+
+              <div className="mt-2 text-xl font-bold text-gray-900 md:text-2xl">
+                {`৳${Number(order.subtotal ?? 0).toFixed(2)}`}
+              </div>
+
+              {isReadyToBill ? (
+                <Button
+                  onClick={handleBillingClick}
+                  className="mt-4 w-full rounded-lg bg-gradient-to-r from-orange-500 to-red-500 py-2.5 font-semibold text-white shadow-md transition-all duration-300 hover:from-orange-600 hover:to-red-600 hover:shadow-lg"
+                >
+                  Proceed to Billing
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <div className="text-center text-sm font-medium tracking-wide text-gray-500 uppercase">
+              TABLE STATUS UPDATED
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

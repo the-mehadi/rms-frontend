@@ -130,8 +130,20 @@ function extractOrders(payload) {
 
 export function normalizeTableOrdersResponse(apiResponse, fallbackTableId) {
   const payload = apiResponse?.data ?? apiResponse ?? {};
-  const table = payload?.table ?? payload?.order?.table ?? null;
   const rawOrders = extractOrders(payload);
+  const primaryOrder = rawOrders[0] ?? null;
+  const table =
+    payload?.table ??
+    payload?.order?.table ??
+    primaryOrder?.table ??
+    primaryOrder?.order?.table ??
+    null;
+  const derivedStatus =
+    table?.status ??
+    payload?.status ??
+    payload?.order?.status ??
+    primaryOrder?.status ??
+    primaryOrder?.table?.status;
 
   const unpaidOrders = rawOrders
     .filter(isOrderUnpaid)
@@ -185,9 +197,10 @@ export function normalizeTableOrdersResponse(apiResponse, fallbackTableId) {
         payload?.table_number ??
         payload?.order?.table_number ??
         payload?.order?.table?.table_number ??
+        primaryOrder?.table?.table_number ??
         fallbackTableId,
       capacity: table?.capacity ?? 0,
-      status: normalizeTableStatus(table?.status ?? payload?.status),
+      status: normalizeTableStatus(derivedStatus),
     },
     orders: unpaidOrders,
     orderIds,

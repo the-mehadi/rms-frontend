@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { HoverLift } from "@/components/motion/HoverLift";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,10 @@ const TABLE_STYLES = {
     bg: "bg-[radial-gradient(120px_120px_at_30%_20%,rgba(99,102,241,0.35)_0%,transparent_60%)]",
   },
 };
+
+function normalizeMenuPrice(value) {
+  return Math.round(Number(value) || 0);
+}
 
 function MenuItemCard({ item, onAdd }) {
   return (
@@ -228,7 +234,8 @@ function Cart({ cart, setCart, notes, setNotes, selectedTable, onSubmitOrder, su
   );
 }
 
-export default function OrdersPage() {
+function OrdersPageContent() {
+  const searchParams = useSearchParams();
   const [tables, setTables] = React.useState([]);
   const [selectedTable, setSelectedTable] = React.useState(null);
   const [categories, setCategories] = React.useState(["All"]);
@@ -242,6 +249,8 @@ export default function OrdersPage() {
   const [categoryItems, setCategoryItems] = React.useState([]);
   const [loadingMenu, setLoadingMenu] = React.useState(true);
   const [submittingOrder, setSubmittingOrder] = React.useState(false);
+  const requestedTableId = searchParams.get("table_id");
+  const requestedTableNumber = searchParams.get("table");
 
   const fetchTables = React.useCallback(async () => {
     try {
@@ -295,6 +304,22 @@ export default function OrdersPage() {
     return () => clearInterval(interval);
   }, [fetchTables]);
 
+  React.useEffect(() => {
+    if (!tables.length) return;
+
+    if (selectedTable?.id && String(selectedTable.id) === requestedTableId) {
+      return;
+    }
+
+    const matchedTable =
+      tables.find((table) => String(table.id) === requestedTableId) ??
+      tables.find((table) => String(table.table_number) === requestedTableNumber);
+
+    if (matchedTable) {
+      setSelectedTable(matchedTable);
+    }
+  }, [requestedTableId, requestedTableNumber, selectedTable?.id, tables]);
+
   const handleUpdateOrderStatus = async (orderId, status) => {
     try {
       const response = await ordersAPI.updateStatus(orderId, status);
@@ -320,7 +345,7 @@ export default function OrdersPage() {
     return menuItems
       .map((it) => ({
         ...it,
-        price: Number(it.price) || 0,
+        price: normalizeMenuPrice(it.price),
         category: categoryNameById.get(it.category_id) ?? "Uncategorized",
         tag: it.is_available ? "Available" : "Unavailable",
       }))
@@ -360,7 +385,7 @@ export default function OrdersPage() {
         items: Object.values(cart).map((item) => ({
           menu_item_id: item.id,
           quantity: item.qty,
-          unit_price: item.price,
+          unit_price: normalizeMenuPrice(item.price),
         })),
       });
 
@@ -400,7 +425,7 @@ export default function OrdersPage() {
                   </div>
                 </div>
                 <Badge className="rounded-full bg-muted text-muted-foreground">
-                  Selected: Table {selectedTable?.table_number}
+                  {selectedTable ? `Selected: Table ${selectedTable.table_number}` : "Select a table"}
                 </Badge>
               </div>
 
@@ -616,6 +641,14 @@ export default function OrdersPage() {
         </Sheet>
       </div>
     </>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={null}>
+      <OrdersPageContent />
+    </Suspense>
   );
 }
 
