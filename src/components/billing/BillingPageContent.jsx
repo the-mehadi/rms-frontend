@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 // API
 import { ordersAPI } from "@/lib/api/orders";
-import { paymentsAPI } from "@/lib/api/payments";
+import { billsAPI } from "@/lib/api/bills";
 import { normalizeTableOrdersResponse } from "@/lib/order-utils";
 
 // Components
@@ -40,14 +40,40 @@ function roundMoney(value) {
 
 function buildReceiptNumber(responseData, tableId) {
   const candidate =
+    responseData?.data?.receipt_no ??
+    responseData?.data?.receipt_number ??
+    responseData?.data?.invoice_no ??
+    responseData?.data?.payment_id ??
+    responseData?.data?.bill_id ??
+    responseData?.data?.id ??
     responseData?.receipt_no ??
     responseData?.receipt_number ??
     responseData?.invoice_no ??
     responseData?.payment_id ??
-    responseData?.bill_id;
+    responseData?.bill_id ??
+    responseData?.id;
 
   if (candidate) return String(candidate);
   return `PAY-${tableId}-${Date.now()}`;
+}
+
+function getBillIdFromResponse(response) {
+  return response?.data?.data?.id ?? response?.data?.id ?? null;
+}
+
+function getResponsePayload(response) {
+  return response?.data?.data ?? response?.data ?? {};
+}
+
+function getBackendAmount(payload, keys) {
+  for (const key of keys) {
+    const value = payload?.[key];
+    if (value !== undefined && value !== null && value !== "") {
+      return roundMoney(value);
+    }
+  }
+
+  return null;
 }
 
 export default function BillingPageContent() {
@@ -67,6 +93,7 @@ export default function BillingPageContent() {
   const [processing, setProcessing] = React.useState(false);
   const [paymentComplete, setPaymentComplete] = React.useState(false);
   const [receiptUrl, setReceiptUrl] = React.useState("");
+  const [backendBillTotals, setBackendBillTotals] = React.useState(null);
 
   const [method, setMethod] = React.useState("cash");
   const [discount, setDiscount] = React.useState(0);
@@ -103,6 +130,7 @@ export default function BillingPageContent() {
       setReceiptItems(normalized.mergedItems);
       setPaymentComplete(false);
       setReceiptUrl("");
+      setBackendBillTotals(null);
       setBillMeta((prev) => ({
         ...prev,
         receiptNo: "---",
@@ -164,6 +192,10 @@ export default function BillingPageContent() {
   const vatRate = 0.05; // 5% VAT
   const vat = roundMoney(afterDiscount * vatRate);
   const total = roundMoney(afterDiscount + vat);
+  const displaySubtotal = backendBillTotals?.subtotal ?? subtotal;
+  const displayDiscount = backendBillTotals?.discount ?? discountAmount;
+  const displayVat = backendBillTotals?.vat ?? vat;
+  const displayTotal = backendBillTotals?.total ?? total;
 
   const receiptShareText = React.useMemo(() => {
     return [
@@ -173,26 +205,26 @@ export default function BillingPageContent() {
       `Orders: ${orderIds.length > 0 ? orderIds.join(", ") : "-"}`,
       `Status: ${paymentComplete ? "PAID" : "PENDING PAYMENT"}`,
       `Method: ${method.toUpperCase()}`,
-      `Subtotal: ${subtotal}`,
-      `VAT: ${vat}`,
-      `Discount: ${discountAmount}`,
-      `Grand Total: ${total}`,
+      `Subtotal: ${displaySubtotal}`,
+      `VAT: ${displayVat}`,
+      `Discount: ${displayDiscount}`,
+      `Grand Total: ${displayTotal}`,
       receiptUrl ? `Receipt URL: ${receiptUrl}` : null,
     ]
       .filter(Boolean)
       .join("\n");
   }, [
     billMeta.receiptNo,
-    discountAmount,
+    displayDiscount,
+    displaySubtotal,
+    displayTotal,
+    displayVat,
     method,
     orderIds,
     paymentComplete,
     receiptUrl,
-    subtotal,
     tableData?.number,
     tableIdFromUrl,
-    total,
-    vat,
   ]);
 
   const qrCodeUrl = React.useMemo(() => {
@@ -220,30 +252,38 @@ export default function BillingPageContent() {
     try {
       const payload = {
         table_id: Number(tableIdFromUrl) || tableIdFromUrl,
-        order_ids: orderIds,
         method,
-        subtotal,
-        vat,
+        vat: 5,
         discount: discountAmount,
-        grand_total: total,
       };
 
-      const response = await paymentsAPI.process(payload);
+      const response = await billsAPI.create(payload);
 
-      if (response?.success === false) {
-        throw new Error(response.message || "Failed to process payment");
+      if (response?.data?.success === false) {
+        throw new Error(response.data.message || "Failed to create bill");
       }
 
-      const responseData = response?.data ?? response ?? {};
-      const billId = responseData?.bill_id ?? null;
-      const receiptNo = buildReceiptNumber(responseData, tableIdFromUrl);
+      const responseData = getResponsePayload(response);
+      const billId = getBillIdFromResponse(response);
+      const receiptNo = buildReceiptNumber(response, tableIdFromUrl);
       const nextReceiptUrl =
         billId && process.env.NEXT_PUBLIC_API_BASE_URL
           ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/bills/${billId}/receipt`
           : "";
+      const nextBackendBillTotals = {
+        subtotal:
+          getBackendAmount(responseData, ["subtotal", "sub_total"]) ?? subtotal,
+        discount:
+          getBackendAmount(responseData, ["discount_amount", "discount"]) ?? discountAmount,
+        vat:
+          getBackendAmount(responseData, ["vat_amount", "vat_total", "vat"]) ?? vat,
+        total:
+          getBackendAmount(responseData, ["grand_total", "total", "net_total"]) ?? total,
+      };
 
       setPaymentComplete(true);
       setReceiptUrl(nextReceiptUrl);
+      setBackendBillTotals(nextBackendBillTotals);
       setBillMeta((prev) => ({
         ...prev,
         receiptNo,
@@ -251,7 +291,7 @@ export default function BillingPageContent() {
         paidAt: new Date().toISOString(),
       }));
 
-      toast.success("Payment completed. Table is now free.");
+      toast.success("Bill created successfully. Table is now free.");
 
       return {
         receiptNo,
@@ -259,7 +299,7 @@ export default function BillingPageContent() {
       };
     } catch (error) {
       console.error("Payment error:", error);
-      toast.error(error.response?.data?.message || error.message || "Failed to process payment");
+      toast.error(error.response?.data?.message || error.message || "Failed to create bill");
       return null;
     } finally {
       setProcessing(false);
@@ -272,8 +312,8 @@ export default function BillingPageContent() {
     orderIds,
     paymentComplete,
     receiptItems.length,
-    subtotal,
     tableIdFromUrl,
+    subtotal,
     total,
     vat,
   ]);
@@ -282,6 +322,7 @@ export default function BillingPageContent() {
     const result = await processPayment();
     if (!result) return;
 
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
     window.print();
   };
 
@@ -321,6 +362,7 @@ export default function BillingPageContent() {
     setDiscountEnabled(false);
     setUsePercent(true);
     setReceiptUrl("");
+    setBackendBillTotals(null);
     setBillMeta({
       receiptNo: "---",
       cashier: "Mehadi",
@@ -418,10 +460,10 @@ export default function BillingPageContent() {
               <Separator className="my-5" />
 
               <BillSummary 
-                subtotal={subtotal} 
-                discount={discountAmount} 
-                vat={vat} 
-                total={total} 
+                subtotal={displaySubtotal} 
+                discount={displayDiscount} 
+                vat={displayVat} 
+                total={displayTotal} 
                 vatRate={vatRate}
               />
 

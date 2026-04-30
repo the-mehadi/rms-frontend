@@ -8,7 +8,7 @@ function clearFloorViewCache() {
 
 export const paymentsAPI = {
   process: async (data) => {
-    const response = await apiClient.post("/payments", data);
+    const response = await apiClient.post("/bills", data);
 
     if (data?.table_id) {
       clearTableOrdersCache(data.table_id);

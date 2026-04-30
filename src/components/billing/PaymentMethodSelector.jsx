@@ -1,9 +1,8 @@
 import { cn } from "@/lib/utils";
-import { BanknoteIcon, CreditCardIcon, SmartphoneIcon } from "lucide-react";
+import { BanknoteIcon, CreditCardIcon } from "lucide-react";
 
 const METHODS = [
   { key: "cash", label: "Cash", icon: BanknoteIcon, description: "Standard cash payment" },
-  { key: "bkash", label: "bKash", icon: SmartphoneIcon, description: "Mobile financial service" },
   { key: "card", label: "Card", icon: CreditCardIcon, description: "Credit or Debit card" },
 ];
 
