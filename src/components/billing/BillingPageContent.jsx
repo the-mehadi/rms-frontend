@@ -14,6 +14,7 @@ import { toast } from "sonner";
 // API
 import { ordersAPI } from "@/lib/api/orders";
 import { billsAPI } from "@/lib/api/bills";
+import { paymentsAPI } from "@/lib/api/payments";
 import { normalizeTableOrdersResponse } from "@/lib/order-utils";
 
 // Components
@@ -81,6 +82,7 @@ export default function BillingPageContent() {
   const router = useRouter();
   const tableIdFromUrl = searchParams.get("table_id") ?? searchParams.get("tableId");
   const tableNumberFromUrl = searchParams.get("table") ?? searchParams.get("tableNumber");
+  const billIdFromUrl = searchParams.get("bill_id") ?? searchParams.get("billId");
   const orderIdFromUrl = searchParams.get("order") ?? searchParams.get("orderId");
   const amountFromUrl = searchParams.get("amount");
 
@@ -90,10 +92,16 @@ export default function BillingPageContent() {
   const [orderIds, setOrderIds] = React.useState([]);
   const [receiptItems, setReceiptItems] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
+  const [billLoading, setBillLoading] = React.useState(false);
   const [processing, setProcessing] = React.useState(false);
   const [paymentComplete, setPaymentComplete] = React.useState(false);
   const [receiptUrl, setReceiptUrl] = React.useState("");
   const [backendBillTotals, setBackendBillTotals] = React.useState(null);
+  const [billTableId, setBillTableId] = React.useState(null);
+  const [billTableNumber, setBillTableNumber] = React.useState(null);
+
+  const effectiveTableId = tableIdFromUrl ?? billTableId;
+  const effectiveTableNumber = tableNumberFromUrl ?? billTableNumber;
 
   const [method, setMethod] = React.useState("cash");
   const [discount, setDiscount] = React.useState(0);
@@ -133,9 +141,9 @@ export default function BillingPageContent() {
       setBackendBillTotals(null);
       setBillMeta((prev) => ({
         ...prev,
-        receiptNo: "---",
-        paidAt: null,
-        billId: null,
+        receiptNo: billIdFromUrl ? prev.receiptNo : "---",
+        paidAt: billIdFromUrl ? prev.paidAt : null,
+        billId: billIdFromUrl ?? null,
       }));
 
       if (normalized.table?.id || normalized.table?.number) {
@@ -163,17 +171,16 @@ export default function BillingPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [tableIdFromUrl, tableNumberFromUrl]);
+  }, [tableIdFromUrl, tableNumberFromUrl, billIdFromUrl]);
 
   React.useEffect(() => {
-    if (tableIdFromUrl) {
-      fetchOrders(tableIdFromUrl);
-    } else {
-      setLoading(false);
+    if (effectiveTableId) {
+      fetchOrders(effectiveTableId);
+      return;
     }
-  }, [fetchOrders, tableIdFromUrl, tableNumberFromUrl]);
+    setLoading(false);
+  }, [fetchOrders, effectiveTableId]);
 
-  // Calculations
   const subtotal = React.useMemo(
     () => roundMoney(receiptItems.reduce((sum, item) => sum + (Number(item.subtotal) || 0), 0)),
     [receiptItems]
@@ -196,6 +203,76 @@ export default function BillingPageContent() {
   const displayDiscount = backendBillTotals?.discount ?? discountAmount;
   const displayVat = backendBillTotals?.vat ?? vat;
   const displayTotal = backendBillTotals?.total ?? total;
+
+  React.useEffect(() => {
+    if (!billIdFromUrl) return;
+
+    let isMounted = true;
+    const loadBill = async () => {
+      setBillLoading(true);
+      try {
+        const response = await billsAPI.getById(billIdFromUrl);
+        const responseData = getResponsePayload(response);
+        const normalized = normalizeTableOrdersResponse(response, tableIdFromUrl ?? undefined);
+
+        if (normalized.orders.length > 0) {
+          setOrders(normalized.orders);
+          setOrderIds(normalized.orderIds);
+          setReceiptItems(normalized.mergedItems);
+        }
+
+        if (normalized.table?.id || normalized.table?.number) {
+          setBillTableId(normalized.table.id);
+          setBillTableNumber(normalized.table.number);
+          setTableData({
+            id: normalized.table.id,
+            number: normalized.table.number,
+          });
+        }
+
+        const receiptNo = buildReceiptNumber(response, tableIdFromUrl);
+        const nextReceiptUrl =
+          billIdFromUrl && process.env.NEXT_PUBLIC_API_BASE_URL
+            ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/bills/${billIdFromUrl}/receipt`
+            : "";
+
+        const nextBackendBillTotals = {
+          subtotal:
+            getBackendAmount(responseData, ["subtotal", "sub_total"]) ?? subtotal,
+          discount:
+            getBackendAmount(responseData, ["discount_amount", "discount"]) ?? discountAmount,
+          vat:
+            getBackendAmount(responseData, ["vat_amount", "vat_total", "vat"]) ?? vat,
+          total:
+            getBackendAmount(responseData, ["grand_total", "total", "net_total"]) ?? total,
+        };
+
+        if (!isMounted) return;
+
+        setReceiptUrl(nextReceiptUrl);
+        setBackendBillTotals(nextBackendBillTotals);
+        setBillMeta((prev) => ({
+          ...prev,
+          receiptNo,
+          billId: billIdFromUrl,
+        }));
+      } catch (error) {
+        console.error("Fetch bill error:", error);
+        toast.error(error?.response?.data?.message || error.message || "Failed to load bill data");
+      } finally {
+        if (isMounted) {
+          setBillLoading(false);
+        }
+      }
+    };
+
+    loadBill();
+    return () => {
+      isMounted = false;
+    };
+  }, [billIdFromUrl, tableIdFromUrl, subtotal, discountAmount, vat, total]);
+
+  const isLoading = loading || billLoading;
 
   const receiptShareText = React.useMemo(() => {
     return [
@@ -250,25 +327,28 @@ export default function BillingPageContent() {
     setProcessing(true);
 
     try {
+      const currentBillId = billIdFromUrl || billMeta.billId;
+      if (!currentBillId) {
+        throw new Error("Missing bill_id for payment");
+      }
+
       const payload = {
-        table_id: Number(tableIdFromUrl) || tableIdFromUrl,
-        method,
-        vat: 5,
-        discount: discountAmount,
+        bill_id: currentBillId,
+        payment_method: method,
+        amount: displayTotal,
       };
 
-      const response = await billsAPI.create(payload);
+      const response = await paymentsAPI.process(payload);
 
       if (response?.data?.success === false) {
-        throw new Error(response.data.message || "Failed to create bill");
+        throw new Error(response.data.message || "Failed to process payment");
       }
 
       const responseData = getResponsePayload(response);
-      const billId = getBillIdFromResponse(response);
-      const receiptNo = buildReceiptNumber(response, tableIdFromUrl);
+      const receiptNo = buildReceiptNumber(response, currentBillId);
       const nextReceiptUrl =
-        billId && process.env.NEXT_PUBLIC_API_BASE_URL
-          ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/bills/${billId}/receipt`
+        currentBillId && process.env.NEXT_PUBLIC_API_BASE_URL
+          ? `${process.env.NEXT_PUBLIC_API_BASE_URL}/bills/${currentBillId}/receipt`
           : "";
       const nextBackendBillTotals = {
         subtotal:
@@ -287,32 +367,33 @@ export default function BillingPageContent() {
       setBillMeta((prev) => ({
         ...prev,
         receiptNo,
-        billId,
+        billId: currentBillId,
         paidAt: new Date().toISOString(),
       }));
 
-      toast.success("Bill created successfully. Table is now free.");
+      toast.success("Payment processed successfully. Table is now free.");
 
       return {
         receiptNo,
-        billId,
+        billId: currentBillId,
       };
     } catch (error) {
       console.error("Payment error:", error);
-      toast.error(error.response?.data?.message || error.message || "Failed to create bill");
+      toast.error(error?.response?.data?.message || error.message || "Failed to process payment");
       return null;
     } finally {
       setProcessing(false);
     }
   }, [
+    billIdFromUrl,
     billMeta.billId,
     billMeta.receiptNo,
     discountAmount,
+    displayTotal,
     method,
     orderIds,
     paymentComplete,
     receiptItems.length,
-    tableIdFromUrl,
     subtotal,
     total,
     vat,
@@ -324,6 +405,7 @@ export default function BillingPageContent() {
 
     await new Promise((resolve) => window.requestAnimationFrame(resolve));
     window.print();
+    router.push("/floor-view");
   };
 
   const handleEmailReceipt = async () => {
@@ -455,7 +537,7 @@ export default function BillingPageContent() {
 
               <Separator className="my-5" />
 
-              <OrderItemsList items={receiptItems} loading={loading} />
+              <OrderItemsList items={receiptItems} loading={isLoading} />
 
               <Separator className="my-5" />
 

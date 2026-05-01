@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { getFloorViewData, isReadyToBill } from "@/lib/api/tables";
+import { billsAPI } from "@/lib/api/bills";
 import TableGrid from "@/components/floor-view/TableGrid";
 import SummaryStats from "@/components/floor-view/SummaryStats";
 
@@ -57,6 +58,7 @@ export default function FloorViewPage() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState("");
   const [lastUpdated, setLastUpdated] = React.useState(null);
+  const [creatingBill, setCreatingBill] = React.useState(false);
 
   const fetchFloorData = React.useCallback(async (isRefresh = false, showLoading = true) => {
     try {
@@ -139,10 +141,57 @@ export default function FloorViewPage() {
   );
 
   const handleReadyToBillClick = React.useCallback(
-    (table) => {
-      router.push(buildBillingUrl(table));
+    async (table) => {
+      if (creatingBill) return;
+
+      setCreatingBill(true);
+      try {
+        const payload = {
+          table_id: Number(table.id) || table.id,
+          method: "cash",
+          vat: 5,
+          discount: 0,
+        };
+
+        const response = await billsAPI.create(payload);
+
+        if (response?.data?.success === false) {
+          throw new Error(response.data.message || "Failed to create bill");
+        }
+
+        const billId =
+          response?.data?.data?.id ??
+          response?.data?.data?.bill_id ??
+          response?.data?.id ??
+          response?.data?.bill_id;
+
+        if (!billId) {
+          throw new Error("Bill creation did not return bill_id");
+        }
+
+        const params = new URLSearchParams({
+          bill_id: String(billId),
+          table_id: String(table.id),
+          table: String(table.table_number),
+        });
+
+        if (table.unpaid_order?.order_id) {
+          params.set("order", String(table.unpaid_order.order_id));
+        }
+
+        if (table.unpaid_order?.subtotal !== undefined) {
+          params.set("amount", String(table.unpaid_order.subtotal));
+        }
+
+        router.push(`/billing?${params.toString()}`);
+      } catch (error) {
+        console.error("Bill creation failed:", error);
+        toast.error(error?.response?.data?.message || error.message || "Failed to create bill");
+      } finally {
+        setCreatingBill(false);
+      }
     },
-    [buildBillingUrl, router]
+    [creatingBill, router]
   );
 
   const handleTableClick = React.useCallback(
